@@ -1,0 +1,10 @@
+name: wpl-notebooks
+channels:
+  - defaults
+  - conda-forge
+dependencies:
+  - python
+  - stackstac
+  - pystac[version='<2.0']
+  - jupyterlab
+prefix: /home/sam/miniconda3/envs/wpl-notebooks
