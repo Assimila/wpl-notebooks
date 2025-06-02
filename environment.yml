@@ -1,10 +1,14 @@
 name: wpl-notebooks
 channels:
-  - defaults
   - conda-forge
+  - defaults
 dependencies:
   - python
-  - stackstac
-  - pystac[version='<2.0']
-  - jupyterlab
+  - notebook
+  - nbstripout
+  - pystac
+  - xarray
+  - rioxarray
+  - dask
+  - zarr<3
 prefix: /home/sam/miniconda3/envs/wpl-notebooks
