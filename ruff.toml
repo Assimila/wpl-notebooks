@@ -1,0 +1,9 @@
+# Allow lines to be as long as 120.
+line-length = 120
+
+[lint]
+extend-select = [
+    "E5",
+    # isort
+    "I",
+]

@@ -11,4 +11,10 @@ dependencies:
   - rioxarray
   - dask
   - zarr<3
+  - panel
+  - param
+  - watchfiles  # dev
+  - jupyter_bokeh  # https://panel.holoviz.org/how_to/notebook/other_nb.html
+  - holoviews
+  - geoviews
 prefix: /home/sam/miniconda3/envs/wpl-notebooks
