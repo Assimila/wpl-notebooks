@@ -11,6 +11,8 @@ dependencies:
   - rioxarray
   - dask
   - zarr<3
+  - requests
+  - aiohttp
   - panel
   - param
   - watchfiles  # dev

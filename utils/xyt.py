@@ -5,6 +5,7 @@ import geoviews as gv
 import holoviews as hv
 import panel as pn
 import param
+import pystac
 from holoviews import streams
 
 
@@ -40,10 +41,33 @@ class SpatialExtent(param.Parameterized):
         polygons.opts(fill_alpha=0, line_color="blue", line_width=2)
         return polygons
 
+    @staticmethod
+    def from_pystac(spatial_extent: pystac.SpatialExtent) -> "SpatialExtent":
+        """
+        Create a SpatialExtent object from STAC JSON.
+        """
+        bbox = spatial_extent.bboxes[0]
+        if len(bbox) != 4:
+            raise ValueError()
+        return SpatialExtent(
+            longitude_min=bbox[0],
+            latitude_min=bbox[1],
+            longitude_max=bbox[2],
+            latitude_max=bbox[3],
+        )
+
 
 class TemporalExtent(param.Parameterized):
     t_min: datetime.datetime = param.Date(default=datetime.datetime(2000, 1, 1), allow_None=False, constant=True)  # type: ignore
     t_max: datetime.datetime = param.Date(default=datetime.datetime(2024, 12, 31), allow_None=False, constant=True)  # type: ignore
+
+    @staticmethod
+    def from_pystac(temporal_extent: pystac.TemporalExtent) -> "TemporalExtent":
+        """
+        Create a TemporalExtent object from STAC JSON.
+        """
+        t_min, t_max = temporal_extent.intervals[0]
+        return TemporalExtent(t_min=t_min, t_max=t_max)
 
 
 class Extent(param.Parameterized):
@@ -61,43 +85,12 @@ class Extent(param.Parameterized):
     )  # type: ignore
 
     @staticmethod
-    def from_json(json: dict) -> "Extent":
+    def from_pystac(extent: pystac.Extent) -> "Extent":
         """
         Create an Extent object from STAC JSON.
-
-        ```json
-        {
-            "spatial": {
-                "bbox": [
-                    [
-                        19.4342728416868,
-                        64.0867100842452,
-                        19.702569859525383,
-                        64.2372650939366
-                    ]
-                ]
-            },
-            "temporal": {
-                "interval": [
-                    [
-                        "2013-06-02T00:00:00Z",
-                        "2023-06-30T00:00:00Z"
-                    ]
-                ]
-            }
-        }
-        ```
         """
-        bbox = json["spatial"]["bbox"][0]
-        if len(bbox) != 4:
-            raise ValueError("Invalid bounding box length, expected 4 values.")
-        spatial = SpatialExtent(
-            longitude_min=bbox[0], latitude_min=bbox[1], longitude_max=bbox[2], latitude_max=bbox[3]
-        )
-        interval = json["temporal"]["interval"][0]
-        t_min = datetime.datetime.fromisoformat(interval[0])
-        t_max = datetime.datetime.fromisoformat(interval[1])
-        temporal = TemporalExtent(t_min=t_min, t_max=t_max)
+        spatial = SpatialExtent.from_pystac(extent.spatial)
+        temporal = TemporalExtent.from_pystac(extent.temporal)
         return Extent(spatial=spatial, temporal=temporal)
 
 
