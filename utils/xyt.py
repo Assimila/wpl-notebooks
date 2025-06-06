@@ -167,7 +167,7 @@ class XYT(pn.viewable.Viewer):
 
         def point(longitude, latitude) -> gv.Points:
             points = gv.Points([(longitude, latitude)], kdims=["longitude", "latitude"])
-            points.opts(color="red", size=10)
+            points.opts(marker="+", color="red", size=14, line_width=2)
             return points
 
         plot = gv.DynamicMap(point, streams={"longitude": self.param.longitude, "latitude": self.param.latitude})
