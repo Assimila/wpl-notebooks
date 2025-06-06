@@ -2,7 +2,6 @@ import datetime
 
 import cartopy.crs as ccrs
 import geoviews as gv
-import holoviews as hv
 import panel as pn
 import param
 import pystac
@@ -158,6 +157,26 @@ class XYT(pn.viewable.Viewer):
             # fail silently on validation errors, e.g. if the point is outside the bounds
             pass
 
+    def point(self) -> gv.DynamicMap:
+        """
+        Build a visualisation of the point of interest
+        which is dynamically bound to (self.latitude, self.longitude).
+
+        Tap / click on the map to update the point of interest.
+        """
+
+        def point(longitude, latitude) -> gv.Points:
+            points = gv.Points([(longitude, latitude)], kdims=["longitude", "latitude"])
+            points.opts(color="red", size=10)
+            return points
+
+        plot = gv.DynamicMap(point, streams={"longitude": self.param.longitude, "latitude": self.param.latitude})
+
+        tap = streams.Tap(rename={"x": "longitude", "y": "latitude"}, source=plot)
+        tap.add_subscriber(self.maybe_update_lon_lat)
+
+        return plot
+
     def map_view(self):
         """
         GeoViews plot in Google web mercator projection with a basemap layer.
@@ -166,22 +185,12 @@ class XYT(pn.viewable.Viewer):
         """
         basemap = gv.tile_sources.OSM
         bbox = self.extent.spatial.polygon
+        point = self.point()
 
-        def point(x, y) -> gv.Points:
-            """Create a point at the given x, y coordinates."""
-            points = gv.Points([(x, y)], kdims=["longitude", "latitude"])
-            points.opts(color="red", size=10)
-            return points
+        overlay = basemap * bbox * point
+        overlay.opts(projection=ccrs.GOOGLE_MERCATOR)
 
-        point_dmap = hv.DynamicMap(point, streams={"x": self.param.longitude, "y": self.param.latitude})
-
-        tap = streams.Tap(rename={"x": "longitude", "y": "latitude"}, source=point_dmap)
-        tap.add_subscriber(self.maybe_update_lon_lat)
-
-        plot = basemap * bbox * point_dmap
-        plot.opts(projection=ccrs.GOOGLE_MERCATOR)
-
-        return plot
+        return overlay
 
     def __panel__(self) -> pn.viewable.Viewable:
         return pn.Row(
@@ -201,5 +210,5 @@ class XYT(pn.viewable.Viewer):
                     },
                 },
             ),
-            pn.pane.HoloViews(self.map_view()),
+            pn.pane.HoloViews(self.map_view(), width=400),
         )
