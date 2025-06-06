@@ -67,6 +67,16 @@ class TemporalExtent(param.Parameterized):
         Create a TemporalExtent object from STAC JSON.
         """
         t_min, t_max = temporal_extent.intervals[0]
+        if t_min is None:
+            raise ValueError
+        if t_min.tzinfo is not None:
+            # convert to tz-naive UTC
+            t_min = t_min.astimezone(datetime.timezone.utc).replace(tzinfo=None)
+        if t_max is None:
+            raise ValueError
+        if t_max.tzinfo is not None:
+            # convert to tz-naive UTC
+            t_max = t_max.astimezone(datetime.timezone.utc).replace(tzinfo=None)
         return TemporalExtent(t_min=t_min, t_max=t_max)
 
 
