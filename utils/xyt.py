@@ -150,6 +150,14 @@ class XYT(pn.viewable.Viewer):
         else:
             self.date = self.extent.temporal.t_min
 
+    def maybe_update_lon_lat(self, longitude, latitude):
+        try:
+            # "transactional" update of both parameters
+            self.param.update(longitude=longitude, latitude=latitude)
+        except ValueError:
+            # fail silently on validation errors, e.g. if the point is outside the bounds
+            pass
+
     def map_view(self):
         """
         GeoViews plot in Google web mercator projection with a basemap layer.
@@ -167,22 +175,8 @@ class XYT(pn.viewable.Viewer):
 
         point_dmap = hv.DynamicMap(point, streams={"x": self.param.longitude, "y": self.param.latitude})
 
-        tap = streams.Tap(source=point_dmap)
-
-        def on_click(x, y):
-            """
-            Args:
-                x: The x-position of a tap or click in data coordinates.
-                y: The y-position of a tap or click in data coordinates.
-            """
-            try:
-                # "transactional" update of both parameters
-                self.param.update(longitude=x, latitude=y)
-            except ValueError:
-                # Ignore clicks outside the bounds
-                pass
-
-        tap.add_subscriber(on_click)
+        tap = streams.Tap(rename={"x": "longitude", "y": "latitude"}, source=point_dmap)
+        tap.add_subscriber(self.maybe_update_lon_lat)
 
         plot = basemap * bbox * point_dmap
         plot.opts(projection=ccrs.GOOGLE_MERCATOR)
