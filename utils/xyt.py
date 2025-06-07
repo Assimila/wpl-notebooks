@@ -157,6 +157,13 @@ class XYT(pn.viewable.Viewer):
             # fail silently on validation errors, e.g. if the point is outside the bounds
             pass
 
+    def maybe_update_date(self, date):
+        try:
+            self.date=date
+        except ValueError:
+            # fail silently on validation errors, e.g. if the date is outside the bounds
+            raise
+
     def point(self) -> gv.DynamicMap:
         """
         Build a visualisation of the point of interest
