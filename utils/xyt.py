@@ -7,6 +7,13 @@ import param
 import pystac
 from holoviews import streams
 
+POINT_OF_INTEREST_OPTS = {
+    "marker": "+",
+    "color": "red",
+    "size": 14,
+    "line_width": 2,
+}
+
 
 class SpatialExtent(param.Parameterized):
     """A bounding box in decimal degrees"""
@@ -159,40 +166,29 @@ class XYT(pn.viewable.Viewer):
 
     def maybe_update_date(self, date):
         try:
-            self.date=date
+            self.date = date
         except ValueError:
             # fail silently on validation errors, e.g. if the date is outside the bounds
             raise
 
-    def point(self) -> gv.DynamicMap:
+    @param.depends("longitude", "latitude", watch=False)
+    def point(self) -> gv.Points:
         """
-        Build a visualisation of the point of interest
-        which is dynamically bound to (self.latitude, self.longitude).
-
-        Tap / click on the map to update the point of interest.
+        Plot the spatial point of interest
         """
+        points = gv.Points([(self.longitude, self.latitude)], kdims=["longitude", "latitude"])
+        points.opts(**POINT_OF_INTEREST_OPTS)
+        return points
 
-        def point(longitude, latitude) -> gv.Points:
-            points = gv.Points([(longitude, latitude)], kdims=["longitude", "latitude"])
-            points.opts(marker="+", color="red", size=14, line_width=2)
-            return points
-
-        plot = gv.DynamicMap(point, streams={"longitude": self.param.longitude, "latitude": self.param.latitude})
-
-        tap = streams.Tap(rename={"x": "longitude", "y": "latitude"}, source=plot)
-        tap.add_subscriber(self.maybe_update_lon_lat)
-
-        return plot
-
-    def map_view(self):
+    @param.depends("longitude", "latitude", watch=False)
+    def map_view(self) -> gv.Overlay:
         """
         GeoViews plot in Google web mercator projection with a basemap layer.
-        Shows the bounding box of the extent, and the (dynamic) point of interest.
-        Tap / click on the map to update the point of interest.
+        Shows the bounding box of the extent, and the point of interest.
         """
         basemap = gv.tile_sources.OSM
         bbox = self.extent.spatial.polygon
-        point = self.point()
+        point = self.point()  # type: ignore
 
         overlay = basemap * bbox * point
         overlay.opts(projection=ccrs.GOOGLE_MERCATOR)
@@ -200,6 +196,12 @@ class XYT(pn.viewable.Viewer):
         return overlay
 
     def __panel__(self) -> pn.viewable.Viewable:
+
+        map = gv.DynamicMap(self.map_view)
+        tap = streams.Tap(rename={"x": "longitude", "y": "latitude"})
+        tap.add_subscriber(self.maybe_update_lon_lat)
+        map = attach_stream_to_dynamic_map(tap, map)
+
         return pn.Row(
             pn.Param(
                 self,
@@ -217,5 +219,21 @@ class XYT(pn.viewable.Viewer):
                     },
                 },
             ),
-            pn.pane.HoloViews(self.map_view(), width=400),
+            pn.pane.HoloViews(map, width=400),
         )
+
+
+def attach_stream_to_dynamic_map(
+    steam: streams.Stream,
+    dynamic_map: gv.DynamicMap
+) -> gv.Overlay:
+    """
+    This is a workaround for https://github.com/holoviz/holoviews/issues/3533
+
+    We would like to directly subscribe to events from the dynamic map,
+    but sometimes these event do not trigger.
+    """
+    # this is an empty element
+    event_source = gv.Points([])
+    steam.source = event_source
+    return event_source * dynamic_map
