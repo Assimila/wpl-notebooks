@@ -2,6 +2,7 @@ import datetime
 
 import cartopy.crs as ccrs
 import geoviews as gv
+import holoviews as hv
 import panel as pn
 import param
 import pystac
@@ -196,11 +197,10 @@ class XYT(pn.viewable.Viewer):
         return overlay
 
     def __panel__(self) -> pn.viewable.Viewable:
-
         map = gv.DynamicMap(self.map_view)
         tap = streams.Tap(rename={"x": "longitude", "y": "latitude"})
         tap.add_subscriber(self.maybe_update_lon_lat)
-        map = attach_stream_to_dynamic_map(tap, map)
+        map = attach_stream_to_map(tap, map)
 
         return pn.Row(
             pn.Param(
@@ -223,10 +223,7 @@ class XYT(pn.viewable.Viewer):
         )
 
 
-def attach_stream_to_dynamic_map(
-    steam: streams.Stream,
-    dynamic_map: gv.DynamicMap
-) -> gv.Overlay:
+def attach_stream_to_map(steam: streams.Stream, dynamic_map: gv.DynamicMap) -> gv.Overlay:
     """
     This is a workaround for https://github.com/holoviz/holoviews/issues/3533
 
@@ -235,5 +232,18 @@ def attach_stream_to_dynamic_map(
     """
     # this is an empty element
     event_source = gv.Points([])
+    steam.source = event_source
+    return event_source * dynamic_map
+
+
+def attach_stream_to_time_series(steam: streams.Stream, dynamic_map: hv.DynamicMap) -> hv.Overlay:
+    """
+    This is a workaround for https://github.com/holoviz/holoviews/issues/3533
+
+    We would like to directly subscribe to events from the dynamic map,
+    but sometimes these event do not trigger.
+    """
+    # this is an empty element
+    event_source = hv.Scatter([])
     steam.source = event_source
     return event_source * dynamic_map
