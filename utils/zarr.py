@@ -37,7 +37,9 @@ class ZarrDataset(pn.viewable.Viewer):
 
     primary_var_name: str = param.Selector(objects=[])  # type: ignore
     uncertainty_var_name: str | None = param.Selector(objects=[])  # type: ignore
-    uncertainty_scalar: float | None = param.Number(default=None, allow_None=True)  # type: ignore
+
+    uncertainty_scalar_name: str | None = param.String(default=None, allow_None=True)  # type: ignore
+    uncertainty_scalar_value: float | None = param.Number(default=None, allow_None=True)  # type: ignore
 
     colormap_name: str = param.Selector(objects=list_cmaps(), allow_None=False)  # type: ignore
     colormap_min: float = param.Number(default=None, allow_None=False)  # type: ignore
@@ -95,11 +97,12 @@ class ZarrDataset(pn.viewable.Viewer):
         ```json
         {
             "assets": ["albedo.xy.zarr", "albedo.ts.zarr"],
-            "colormap_name": "copper",
-            "colormap_range": [0, 1],
             "primary_var_name": "albedo",
-            "uncertainty_scalar": None,
-            "uncertainty_var_name": "albedo_std_dev"
+            "uncertainty_var_name": "albedo_std_dev",
+            "uncertainty_scalar_name": None,
+            "uncertainty_scalar_value": None,
+            "colormap_name": "copper",
+            "colormap_range": [0, 1]
         }
         ```
         """
@@ -133,7 +136,8 @@ class ZarrDataset(pn.viewable.Viewer):
             ts_ds=ts_ds,
             primary_var_name=wpl_render["primary_var_name"],
             uncertainty_var_name=wpl_render["uncertainty_var_name"],
-            uncertainty_scalar=wpl_render["uncertainty_scalar"],
+            uncertainty_scalar_name=wpl_render["uncertainty_scalar_name"],
+            uncertainty_scalar_value=wpl_render["uncertainty_scalar_value"],
             colormap_name=wpl_render["colormap_name"],
             colormap_min=wpl_render["colormap_range"][0],
             colormap_max=wpl_render["colormap_range"][1],
@@ -149,6 +153,46 @@ class ZarrDataset(pn.viewable.Viewer):
         t = self.xy_ds.time.sel(time=self.location.date, method="ffill")
         self.date = pd.Timestamp(t.values).to_pydatetime()
 
+    def load_xy_slice(self) -> xr.DataArray:
+        """
+        Load a slice of the xy_ds dataset for the primary variable at the date of interest.
+        """
+        with self.param.update(loading=True):
+            da = self.xy_ds[self.primary_var_name].sel(time=self.date)
+            da.load()  # load data into memory
+            return da
+
+    def load_ts_slice(self) -> pd.DataFrame:
+        """
+        Load a slice of the ts_ds dataset at the point of interest.
+        Includes uncertainty if available.
+
+        Returns:
+            pandas DataFrame with columns for the primary variable
+            and it's uncertainty (if available).
+        """
+        with self.param.update(loading=True):
+            # transform the point of interest to the CRS of the dataset
+            x, y = self.crs.transform_point(self.location.longitude, self.location.latitude, ccrs.PlateCarree())
+
+            # load data
+            da = self.ts_ds[self.primary_var_name].sel(x=x, y=y, method="nearest")
+            da.load()  # load data into memory
+            series = da.to_series()
+            df = pd.DataFrame({self.primary_var_name: series})
+
+            # uncertainty
+            if self.uncertainty_var_name:
+                da = self.ts_ds[self.uncertainty_var_name].sel(x=x, y=y, method="nearest")
+                da.load()  # load data into memory
+                df[self.uncertainty_var_name] = da.to_series()
+            elif self.uncertainty_scalar_name and self.uncertainty_scalar_value:
+                df[self.uncertainty_scalar_name] = self.uncertainty_scalar_value
+            else:
+                pass  # no uncertainty available
+
+            return df
+
     @param.depends("date", "location.latitude", "location.longitude", watch=False)
     def map_view(self) -> hv.Overlay:
         """
@@ -157,11 +201,9 @@ class ZarrDataset(pn.viewable.Viewer):
         Plot the point of interest.
         """
         with self.param.update(loading=True):
-            _slice = self.xy_ds[self.primary_var_name].sel(time=self.date)
-            # manually trigger loading the data from the zarr store
-            _slice.load()
+            xy_slice = self.load_xy_slice()
 
-            image = gv.Image(_slice, kdims=["x", "y"], crs=self.crs)
+            image = gv.Image(xy_slice, kdims=["x", "y"], crs=self.crs)
             image.opts(colorbar=True, cmap=self.colormap_name, clim=(self.colormap_min, self.colormap_max))
 
             bbox = self.location.extent.spatial.polygon
@@ -180,18 +222,14 @@ class ZarrDataset(pn.viewable.Viewer):
         Plot the time of interest.
         """
         with self.param.update(loading=True):
-            x, y = self.crs.transform_point(self.location.longitude, self.location.latitude, ccrs.PlateCarree())
-            _slice = self.ts_ds[self.primary_var_name].sel(x=x, y=y, method="nearest")
-            # manually trigger loading the data from the zarr store
-            _slice.load()
+            ts_df = self.load_ts_slice()
+            data_series = ts_df[self.primary_var_name]
 
             # uncertainty envelope
             if self.uncertainty_var_name:
-                uncertainty = self.ts_ds[self.uncertainty_var_name].sel(x=x, y=y, method="nearest")
-                # manually trigger loading the data from the zarr store
-                uncertainty.load()
-            elif self.uncertainty_scalar is not None:
-                uncertainty = self.uncertainty_scalar
+                uncertainty = ts_df[self.uncertainty_var_name]
+            elif self.uncertainty_scalar_name:
+                uncertainty = ts_df[self.uncertainty_scalar_name]
             else:
                 uncertainty = None
 
@@ -201,20 +239,20 @@ class ZarrDataset(pn.viewable.Viewer):
             if uncertainty is not None:
                 area = hv.Area(
                     # fill between (X, Y1, Y2)
-                    (_slice.time, (_slice - uncertainty), (_slice + uncertainty)),
+                    (data_series.index, (data_series - uncertainty), (data_series + uncertainty)),
                     kdims=["time"],
                     vdims=["lower bound", "upper bound"],
                 )
                 area.opts(alpha=0.4)
                 elements.append(area)
 
-            curve = hv.Curve(_slice, kdims=["time"])
+            curve = hv.Curve(data_series, kdims=["time"])
             curve = curve.opts(
                 framewise=True,
             )
             elements.append(curve)
 
-            points = hv.Scatter(_slice, kdims=["time"], vdims=[self.primary_var_name])
+            points = hv.Scatter(data_series, kdims=["time"], vdims=[self.primary_var_name])
             # color each point using the colormap
             points = points.opts(
                 color=self.primary_var_name,
@@ -225,7 +263,7 @@ class ZarrDataset(pn.viewable.Viewer):
             elements.append(points)
 
             # index with [] to preserve the length 1 time dimension
-            data_at_date = _slice.sel(time=[self.date])
+            data_at_date = data_series.loc[[pd.Timestamp(self.date)]]
             current_point = hv.Scatter(data_at_date, kdims=["time"], vdims=[self.primary_var_name])
             current_point.opts(**POINT_OF_INTEREST_OPTS)
             elements.append(current_point)
