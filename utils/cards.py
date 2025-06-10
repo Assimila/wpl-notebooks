@@ -40,7 +40,9 @@ def site(site: pystac.Catalog, with_links: bool = False) -> pn.Card:
         indicators_url = utils.get_url("indicators", {"site-id": site.id})
 
         objects.append(
-            pn.pane.Markdown(f"🔗 [Explore data]({collections_url}) or 🔗 [Explore indicators]({indicators_url})")
+            pn.pane.Markdown(
+                f"🔗 [Explore the data]({collections_url}) or 🔗 [Explore the peat health indicators]({indicators_url})"
+            )
         )
 
     biome = utils.get_biome(site)

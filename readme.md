@@ -10,3 +10,9 @@ update requirements.txt
 ```bash
 conda export --from-history > environment.yml
 ```
+
+## serve application
+
+```bash
+panel serve sites.ipynb --index sites --dev --show   
+```

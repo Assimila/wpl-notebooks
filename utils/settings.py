@@ -22,7 +22,7 @@ type RouteInfo = tuple[RouteURL, RouteParams]
 
 # URLs used to generate links between pages
 ROUTES: dict[RouteName, RouteInfo] = {
-    "index": ("/", []),
+    "sites": ("/sites", []),
     "indicators": ("/indicators", ["site-id"]),
     "data": ("/data", ["site-id", "collection-id"]),
     "collections": ("/collections", ["site-id"]),
@@ -34,4 +34,4 @@ WPL_BIOME_KEY = "wpl:biome"
 type Biome = Literal["boreal", "temperate", "tropical"]
 
 
-BIOME_COLOUR: dict[Biome, str] = {"boreal": "teal", "temperate": "darkgoldenrod", "tropical": "green"}
+BIOME_COLOUR: dict[Biome, str] = {"boreal": "mediumturquoise", "temperate": "goldenrod", "tropical": "limegreen"}
