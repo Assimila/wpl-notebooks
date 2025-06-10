@@ -2,18 +2,13 @@ import datetime
 
 import cartopy.crs as ccrs
 import geoviews as gv
-import holoviews as hv
 import panel as pn
 import param
 import pystac
 from holoviews import streams
 
-POINT_OF_INTEREST_OPTS = {
-    "marker": "+",
-    "color": "red",
-    "size": 14,
-    "line_width": 2,
-}
+from .settings import POINT_OF_INTEREST_OPTS
+from .utils import attach_stream_to_map
 
 
 class SpatialExtent(param.Parameterized):
@@ -221,29 +216,3 @@ class XYT(pn.viewable.Viewer):
             ),
             pn.pane.HoloViews(map, width=400),
         )
-
-
-def attach_stream_to_map(steam: streams.Stream, dynamic_map: gv.DynamicMap) -> gv.Overlay:
-    """
-    This is a workaround for https://github.com/holoviz/holoviews/issues/3533
-
-    We would like to directly subscribe to events from the dynamic map,
-    but sometimes these event do not trigger.
-    """
-    # this is an empty element
-    event_source = gv.Points([])
-    steam.source = event_source
-    return event_source * dynamic_map
-
-
-def attach_stream_to_time_series(steam: streams.Stream, dynamic_map: hv.DynamicMap) -> hv.Overlay:
-    """
-    This is a workaround for https://github.com/holoviz/holoviews/issues/3533
-
-    We would like to directly subscribe to events from the dynamic map,
-    but sometimes these event do not trigger.
-    """
-    # this is an empty element
-    event_source = hv.Scatter([])
-    steam.source = event_source
-    return event_source * dynamic_map

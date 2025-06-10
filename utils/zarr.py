@@ -16,7 +16,10 @@ from holoviews import streams
 from holoviews.plotting import list_cmaps
 from rasterio.io import MemoryFile
 
-from .xyt import POINT_OF_INTEREST_OPTS, XYT, attach_stream_to_map, attach_stream_to_time_series
+from .exceptions import MissingRenderKey
+from .settings import POINT_OF_INTEREST_OPTS, WPL_RENDER_KEY
+from .utils import attach_stream_to_map, attach_stream_to_time_series
+from .xyt import XYT
 
 
 class ZarrDataset(pn.viewable.Viewer):
@@ -40,6 +43,7 @@ class ZarrDataset(pn.viewable.Viewer):
     primary_var_name: str = param.Selector(objects=[])  # type: ignore
     uncertainty_var_name: str | None = param.Selector(objects=[])  # type: ignore
 
+    # fallback to scalar uncertainty
     uncertainty_scalar_name: str | None = param.String(default=None, allow_None=True)  # type: ignore
     uncertainty_scalar_value: float | None = param.Number(default=None, allow_None=True)  # type: ignore
 
@@ -48,10 +52,11 @@ class ZarrDataset(pn.viewable.Viewer):
     colormap_max: float = param.Number(default=None, allow_None=False)  # type: ignore
 
     # most appropriate date to visualize (from the time dimension of the dataset)
-    # given the region of interest self.location.date
     date: datetime.datetime = param.Date(allow_None=False)  # type: ignore
 
-    crs: ccrs.CRS = param.ClassSelector(class_=ccrs.CRS, default=None, allow_None=False, constant=True)  # type: ignore
+    crs: ccrs.CRS = param.ClassSelector(
+        class_=ccrs.CRS, default=None, allow_None=False, doc="native coordinate reference system", constant=True
+    )  # type: ignore
 
     loading = param.Boolean(default=False, doc="Indicates whether we are waiting for data to load")  # type: ignore
 
@@ -108,14 +113,13 @@ class ZarrDataset(pn.viewable.Viewer):
         }
         ```
         """
-
-        # this is a custom field which provides some default visualization parameters for the zarr datacube
-        WPL_RENDER_KEY = "wpl:render"
-
         if WPL_RENDER_KEY not in collection.extra_fields:
             raise ValueError(f"Collection {collection.id} does not have the required field {WPL_RENDER_KEY}")
 
-        wpl_render = collection.extra_fields[WPL_RENDER_KEY]
+        try:
+            wpl_render = collection.extra_fields[WPL_RENDER_KEY]
+        except KeyError as e:
+            raise MissingRenderKey from e
 
         xy_asset_key = next(a for a in wpl_render["assets"] if a.endswith(".xy.zarr"))
         ts_asset_key = next(a for a in wpl_render["assets"] if a.endswith(".ts.zarr"))
@@ -150,6 +154,8 @@ class ZarrDataset(pn.viewable.Viewer):
         """
         Given the date of the region of interest,
         find the most appropriate date to visualize from the time dimension of the dataset.
+
+        Updates `self.date`
         """
         # this is a numpy datetime64[ns]
         t = self.xy_ds.time.sel(time=self.location.date, method="ffill")
@@ -261,10 +267,8 @@ class ZarrDataset(pn.viewable.Viewer):
                 area.opts(alpha=0.4)
                 elements.append(area)
 
-            curve = hv.Curve(data_series, kdims=["time"])
-            curve = curve.opts(
-                framewise=True,
-            )
+            curve = hv.Curve(data_series, kdims=["time"], vdims=[self.primary_var_name])
+            curve = curve.opts(framewise=True)
             elements.append(curve)
 
             points = hv.Scatter(data_series, kdims=["time"], vdims=[self.primary_var_name])
@@ -289,7 +293,7 @@ class ZarrDataset(pn.viewable.Viewer):
 
     def get_time_series_csv(self) -> io.StringIO:
         """
-        Get the time series data as a CSV string.
+        Get the time series data (at the current point of interest) as a CSV.
         Suitable for downloading.
         """
         HEADER = "#"
@@ -303,6 +307,10 @@ class ZarrDataset(pn.viewable.Viewer):
         return buffer
 
     def get_xy_slice_geotiff(self) -> MemoryFile:
+        """
+        Get the map (at the current time of interest) as a GeoTIFF.
+        Suitable for downloading.
+        """
         ds = self.load_xy_slice_with_uncertainty()
         memory_file = MemoryFile()
         ds.rio.to_raster(memory_file.name)
