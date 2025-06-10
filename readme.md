@@ -14,5 +14,5 @@ conda export --from-history > environment.yml
 ## serve application
 
 ```bash
-panel serve sites.ipynb --index sites --dev --show   
+panel serve sites.ipynb collections.ipynb --index sites --dev --show
 ```
