@@ -21,6 +21,7 @@ type RouteInfo = tuple[RouteURL, RouteParams]
 
 
 # URLs used to generate links between pages
+# WARNING: when using `panel serve` these routes are defined by the filenames!
 ROUTES: dict[RouteName, RouteInfo] = {
     "sites": ("/sites", []),
     "indicators": ("/indicators", ["site-id"]),
