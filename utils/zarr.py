@@ -1,4 +1,5 @@
 import datetime
+import io
 
 import cartopy.crs as ccrs
 import geoviews as gv
@@ -13,6 +14,7 @@ import rioxarray  # noqa: F401
 import xarray as xr
 from holoviews import streams
 from holoviews.plotting import list_cmaps
+from rasterio.io import MemoryFile
 
 from .xyt import POINT_OF_INTEREST_OPTS, XYT, attach_stream_to_map, attach_stream_to_time_series
 
@@ -162,6 +164,19 @@ class ZarrDataset(pn.viewable.Viewer):
             da.load()  # load data into memory
             return da
 
+    def load_xy_slice_with_uncertainty(self) -> xr.Dataset:
+        """
+        Load a slice of the xy_ds dataset for the primary variable at the date of interest,
+        including uncertainty if available.
+        """
+        with self.param.update(loading=True):
+            variables = [self.primary_var_name]
+            if self.uncertainty_var_name:
+                variables.append(self.uncertainty_var_name)
+            ds = self.xy_ds[variables].sel(time=self.date)
+            ds.load()  # load data into memory
+            return ds
+
     def load_ts_slice(self) -> pd.DataFrame:
         """
         Load a slice of the ts_ds dataset at the point of interest.
@@ -272,6 +287,28 @@ class ZarrDataset(pn.viewable.Viewer):
 
             return overlay
 
+    def get_time_series_csv(self) -> io.StringIO:
+        """
+        Get the time series data as a CSV string.
+        Suitable for downloading.
+        """
+        HEADER = "#"
+        buffer = io.StringIO()
+        buffer.write(f"{HEADER} Time series data for {self.primary_var_name}\n")
+        buffer.write(f"{HEADER} latitude = {self.location.latitude}\n")
+        buffer.write(f"{HEADER} longitude = {self.location.longitude}\n")
+        ts_df = self.load_ts_slice()
+        ts_df.to_csv(buffer)
+        buffer.seek(0)  # rewind
+        return buffer
+
+    def get_xy_slice_geotiff(self) -> MemoryFile:
+        ds = self.load_xy_slice_with_uncertainty()
+        memory_file = MemoryFile()
+        ds.rio.to_raster(memory_file.name)
+        memory_file.seek(0)  # rewind
+        return memory_file
+
     def __panel__(self) -> pn.viewable.Viewable:
         """
         Build a visualisation of the dataset.
@@ -312,6 +349,22 @@ class ZarrDataset(pn.viewable.Viewer):
                     map,
                     width=400,
                     height=300,
+                ),
+                pn.Spacer(width=50, sizing_mode="stretch_height"),
+                pn.Column(
+                    # vertical stack of download buttons
+                    pn.Spacer(sizing_mode="stretch_both"),
+                    pn.widgets.FileDownload(
+                        filename=param.rx("{var}-{date:%Y-%m-%d}.tiff").format(
+                            var=self.param.primary_var_name, date=self.param.date
+                        ),
+                        callback=self.get_xy_slice_geotiff,
+                    ),
+                    pn.widgets.FileDownload(
+                        filename=param.rx("{var}-time-series.csv").format(var=self.param.primary_var_name),
+                        callback=self.get_time_series_csv,
+                    ),
+                    pn.Spacer(sizing_mode="stretch_both"),
                 ),
                 pn.Spacer(sizing_mode="stretch_both"),
             ),
