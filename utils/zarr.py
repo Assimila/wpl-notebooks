@@ -13,9 +13,9 @@ import rasterio.crs
 import rioxarray  # noqa: F401
 import xarray as xr
 from holoviews import streams
-from holoviews.plotting import list_cmaps
 from rasterio.io import MemoryFile
 
+from .colour_maps import get_colour_maps
 from .exceptions import MissingRenderKey
 from .settings import POINT_OF_INTEREST_OPTS, WPL_RENDER_KEY
 from .utils import attach_stream_to_map, attach_stream_to_time_series
@@ -47,7 +47,7 @@ class ZarrDataset(pn.viewable.Viewer):
     uncertainty_scalar_name: str | None = param.String(default=None, allow_None=True)  # type: ignore
     uncertainty_scalar_value: float | None = param.Number(default=None, allow_None=True)  # type: ignore
 
-    colormap_name: str = param.Selector(objects=list_cmaps(), allow_None=False)  # type: ignore
+    colormap_name: str = param.Selector(objects=get_colour_maps(), allow_None=False)  # type: ignore
     colormap_min: float = param.Number(default=None, allow_None=False)  # type: ignore
     colormap_max: float = param.Number(default=None, allow_None=False)  # type: ignore
 
@@ -209,7 +209,9 @@ class ZarrDataset(pn.viewable.Viewer):
 
         return df
 
-    @param.depends("date", "location.latitude", "location.longitude", watch=False)
+    @param.depends(
+        "date", "location.latitude", "location.longitude", "colormap_name", "colormap_min", "colormap_max", watch=False
+    )
     def map_view(self) -> hv.Overlay:
         """
         GeoViews map plot of the primary variable @ the time of interest.
@@ -231,7 +233,9 @@ class ZarrDataset(pn.viewable.Viewer):
 
         return overlay
 
-    @param.depends("date", "location.latitude", "location.longitude", watch=False)
+    @param.depends(
+        "date", "location.latitude", "location.longitude", "colormap_name", "colormap_min", "colormap_max", watch=False
+    )
     def time_series_view(self) -> hv.Overlay:
         """
         Time series plot of the primary variable @ the point of interest.
@@ -263,12 +267,13 @@ class ZarrDataset(pn.viewable.Viewer):
             elements.append(area)
 
         curve = hv.Curve(data_series, kdims=["time"], vdims=[self.primary_var_name])
-        curve = curve.opts(framewise=True, xlabel="date", ylabel=self.primary_var_name)
+        curve.opts(xlabel="date", ylabel=self.primary_var_name)
+        curve.opts(framewise=True)  # all ylims to update
         elements.append(curve)
 
         points = hv.Scatter(data_series, kdims=["time"], vdims=[self.primary_var_name])
         # color each point using the colormap
-        points = points.opts(
+        points.opts(
             color=self.primary_var_name,
             cmap=self.colormap_name,
             clim=(self.colormap_min, self.colormap_max),
@@ -311,6 +316,34 @@ class ZarrDataset(pn.viewable.Viewer):
         ds.rio.to_raster(memory_file.name)
         memory_file.seek(0)  # rewind
         return memory_file
+
+    def widgets(self) -> pn.Param:
+        return pn.Param(
+            self,
+            parameters=["colormap_name", "colormap_min", "colormap_max"],
+            show_name=False,
+            widgets={"colormap_name": pn.widgets.AutocompleteInput},
+        )
+
+    def download_buttons(self):
+        return pn.Column(
+            pn.widgets.FileDownload(
+                filename=param.rx("{var}-{date:%Y-%m-%d}.tiff").format(
+                    var=self.param.primary_var_name, date=self.param.date
+                ),
+                callback=self.get_xy_slice_geotiff,
+                button_style="solid",
+                button_type="primary",
+                icon="file-download",
+            ),
+            pn.widgets.FileDownload(
+                filename=param.rx("{var}-time-series.csv").format(var=self.param.primary_var_name),
+                callback=self.get_time_series_csv,
+                button_style="solid",
+                button_type="primary",
+                icon="file-download",
+            ),
+        )
 
     def __panel__(self) -> pn.viewable.Viewable:
         """
@@ -358,24 +391,6 @@ class ZarrDataset(pn.viewable.Viewer):
                     map,
                     width=600,
                     height=500,
-                ),
-                pn.Column(
-                    # vertical stack of download buttons
-                    pn.VSpacer(),
-                    pn.widgets.FileDownload(
-                        filename=param.rx("{var}-{date:%Y-%m-%d}.tiff").format(
-                            var=self.param.primary_var_name, date=self.param.date
-                        ),
-                        callback=self.get_xy_slice_geotiff,
-                    ),
-                    pn.widgets.FileDownload(
-                        filename=param.rx("{var}-time-series.csv").format(var=self.param.primary_var_name),
-                        callback=self.get_time_series_csv,
-                    ),
-                    pn.VSpacer(),
-                    # add a little horizontal space
-                    # margin (top, right, bottom, left)
-                    margin=(0, 10, 0, 10),
                 ),
             ),
             pn.Row(

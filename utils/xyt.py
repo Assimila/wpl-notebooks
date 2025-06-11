@@ -7,7 +7,7 @@ import param
 import pystac
 from holoviews import streams
 
-from .settings import POINT_OF_INTEREST_OPTS
+from .settings import POINT_OF_INTEREST_OPTS, SIDEBAR_WIDTH
 from .utils import attach_stream_to_map
 
 
@@ -177,13 +177,16 @@ class XYT(pn.viewable.Viewer):
         return points
 
     @param.depends("longitude", "latitude", watch=False)
-    def map_view(self) -> gv.Overlay:
+    def map(self) -> gv.Overlay:
         """
         GeoViews plot in Google web mercator projection with a basemap layer.
         Shows the bounding box of the extent, and the point of interest.
         """
         basemap = gv.tile_sources.OSM
+
         bbox = self.extent.spatial.polygon
+        bbox.opts(xaxis=None, yaxis=None, xlabel="", ylabel="")
+
         point = self.point()  # type: ignore
 
         overlay = basemap * bbox * point
@@ -191,20 +194,64 @@ class XYT(pn.viewable.Viewer):
 
         return overlay
 
-    def __panel__(self) -> pn.viewable.Viewable:
-        map = gv.DynamicMap(self.map_view)
+    def dynamic_map(self):
+        dynamic_map = gv.DynamicMap(self.map)
         tap = streams.Tap(rename={"x": "longitude", "y": "latitude"})
         tap.add_subscriber(self.maybe_update_lon_lat)
-        map = attach_stream_to_map(tap, map)
+        dynamic_map = attach_stream_to_map(tap, dynamic_map)
+        return dynamic_map
+    
+    def widgets(self) -> pn.Param:
+        return pn.Param(
+            self,
+            parameters=["latitude", "longitude", "date"],
+            show_name=False,
+            widgets={
+                "latitude": pn.widgets.FloatInput,
+                "longitude": pn.widgets.FloatInput,
+                "date": {
+                    "type": pn.widgets.DatetimeSlider,
+                    "start": self.extent.temporal.t_min,
+                    "end": self.extent.temporal.t_max,
+                    "step": 60 * 60,  # 1 hour step
+                    "throttled": True,
+                },
+            },
+        )
 
-        return pn.Row(
+    def __panel__(self) -> pn.viewable.Viewable:
+        column = []
+
+        # lat, lon
+        column.append(
             pn.Param(
                 self,
-                parameters=["latitude", "longitude", "date"],
+                parameters=["latitude", "longitude"],
                 show_name=False,
                 widgets={
                     "latitude": pn.widgets.FloatInput,
                     "longitude": pn.widgets.FloatInput,
+                },
+            ),
+        )
+
+        column.append(
+            pn.pane.HoloViews(
+                self.dynamic_map(), 
+                width=SIDEBAR_WIDTH - 20,
+                height=200, 
+                # Prevent this plot from linking with maps in other projections(!)
+                linked_axes=False
+            ),
+        )
+
+        # date
+        column.append(
+            pn.Param(
+                self,
+                parameters=["date"],
+                show_name=False,
+                widgets={
                     "date": {
                         "type": pn.widgets.DatetimeSlider,
                         "start": self.extent.temporal.t_min,
@@ -214,11 +261,6 @@ class XYT(pn.viewable.Viewer):
                     },
                 },
             ),
-            pn.pane.HoloViews(
-                map, 
-                width=400, 
-                height=300, 
-                # Prevent this plot from linking with maps in other projections(!)
-                linked_axes=False
-            ),
         )
+
+        return pn.Column(*column)

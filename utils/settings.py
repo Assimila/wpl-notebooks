@@ -36,3 +36,7 @@ type Biome = Literal["boreal", "temperate", "tropical"]
 
 
 BIOME_COLOUR: dict[Biome, str] = {"boreal": "mediumturquoise", "temperate": "goldenrod", "tropical": "limegreen"}
+
+
+# default is 330
+SIDEBAR_WIDTH = 330

@@ -35,7 +35,7 @@ class UrlQueryParams(param.Parameterized):
     collection: pystac.Collection | None = param.ClassSelector(class_=pystac.Collection, default=None, allow_None=True)  # type: ignore
 
     @param.depends("site_id", watch=True)
-    def maybe_update_site(self):
+    def update_site(self):
         try:
             self.site = sites[self.site_id]
         except KeyError:
@@ -44,7 +44,7 @@ class UrlQueryParams(param.Parameterized):
         self.collection = None
 
     @param.depends("collection_id", watch=True)
-    def maybe_update_collection(self):
+    def update_collection(self):
         if self.site is None:
             self.collection = None
             return
