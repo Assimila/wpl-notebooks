@@ -213,12 +213,14 @@ class ZarrDataset(pn.viewable.Viewer):
     def map_view(self) -> hv.Overlay:
         """
         GeoViews map plot of the primary variable @ the time of interest.
+        Plotted in the native CRS of the dataset.
         Shows the bounding box of the extent.
         Plot the point of interest.
         """
         xy_slice = self.load_xy_slice()
 
         image = gv.Image(xy_slice, kdims=["x", "y"], crs=self.crs)
+        image.opts(projection=self.crs)
         image.opts(colorbar=True, cmap=self.colormap_name, clim=(self.colormap_min, self.colormap_max))
 
         bbox = self.location.extent.spatial.polygon
@@ -261,7 +263,7 @@ class ZarrDataset(pn.viewable.Viewer):
             elements.append(area)
 
         curve = hv.Curve(data_series, kdims=["time"], vdims=[self.primary_var_name])
-        curve = curve.opts(framewise=True)
+        curve = curve.opts(framewise=True, xlabel="date", ylabel=self.primary_var_name)
         elements.append(curve)
 
         points = hv.Scatter(data_series, kdims=["time"], vdims=[self.primary_var_name])
@@ -315,6 +317,7 @@ class ZarrDataset(pn.viewable.Viewer):
         Build a visualisation of the dataset.
 
         GeoViews map plot of the primary variable @ the time of interest.
+        Plotted in the native CRS of the dataset.
         Shows the bounding box of the extent.
         Plot the point of interest.
 
@@ -324,6 +327,11 @@ class ZarrDataset(pn.viewable.Viewer):
 
         Tap / click on the plots to update the point of interest.
         """
+
+        # IMPORTANT: plot size and layout must be set consistently twice!
+        # 1. on the HoloViews object .opts(responsive=True)
+        # 2. on the pn.pane.HoloViews(sizing_mode=...)
+
         map = gv.DynamicMap(self.map_view)
         tap = streams.Tap(rename={"x": "longitude", "y": "latitude"})
         tap.add_subscriber(self.location.maybe_update_lon_lat)
@@ -338,23 +346,22 @@ class ZarrDataset(pn.viewable.Viewer):
             self.location.maybe_update_date(t)
 
         tap.add_subscriber(on_click)
-        timeseries = attach_stream_to_time_series(tap, time_series)
+        time_series = attach_stream_to_time_series(tap, time_series)
+        time_series.opts(height=250, min_width=600, responsive=True)
 
-        # there seems to be a strange bug with sizing_mode="stretch_width" on HoloViews pane
-        # hence use of spacers below
+        # there is an unfortunate bug https://github.com/holoviz/panel/issues/5070
+        # which prevents align="center" on dynamically sized elements
 
         return pn.Column(
             pn.Row(
-                pn.Spacer(sizing_mode="stretch_both"),
                 pn.pane.HoloViews(
                     map,
-                    width=400,
-                    height=300,
+                    width=600,
+                    height=500,
                 ),
-                pn.Spacer(width=50, sizing_mode="stretch_height"),
                 pn.Column(
                     # vertical stack of download buttons
-                    pn.Spacer(sizing_mode="stretch_both"),
+                    pn.VSpacer(),
                     pn.widgets.FileDownload(
                         filename=param.rx("{var}-{date:%Y-%m-%d}.tiff").format(
                             var=self.param.primary_var_name, date=self.param.date
@@ -365,19 +372,19 @@ class ZarrDataset(pn.viewable.Viewer):
                         filename=param.rx("{var}-time-series.csv").format(var=self.param.primary_var_name),
                         callback=self.get_time_series_csv,
                     ),
-                    pn.Spacer(sizing_mode="stretch_both"),
+                    pn.VSpacer(),
+                    # add a little horizontal space
+                    # margin (top, right, bottom, left)
+                    margin=(0, 10, 0, 10),
                 ),
-                pn.Spacer(sizing_mode="stretch_both"),
             ),
             pn.Row(
-                pn.Spacer(sizing_mode="stretch_both"),
                 pn.pane.HoloViews(
-                    timeseries,
-                    width=800,
+                    time_series,
                     height=250,
+                    min_width=600,
+                    sizing_mode="stretch_width",
                 ),
-                pn.Spacer(sizing_mode="stretch_both"),
             ),
             width_policy="max",
-            loading=pn.state.param.busy,
         )

@@ -214,5 +214,5 @@ class XYT(pn.viewable.Viewer):
                     },
                 },
             ),
-            pn.pane.HoloViews(map, width=400),
+            pn.pane.HoloViews(map, width=400, height=300),
         )
