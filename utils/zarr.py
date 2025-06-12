@@ -16,10 +16,9 @@ from holoviews import streams
 from rasterio.io import MemoryFile
 
 from .colour_maps import get_colour_maps
-from .exceptions import MissingRenderKey
 from .settings import POINT_OF_INTEREST_OPTS, WPL_RENDER_KEY
 from .utils import attach_stream_to_map, attach_stream_to_time_series
-from .xyt import XYT
+from .xyt import XYT, Extent
 
 
 class ZarrDataset(pn.viewable.Viewer):
@@ -48,8 +47,8 @@ class ZarrDataset(pn.viewable.Viewer):
     uncertainty_scalar_value: float | None = param.Number(default=None, allow_None=True)  # type: ignore
 
     colormap_name: str = param.Selector(objects=get_colour_maps(), allow_None=False)  # type: ignore
-    colormap_min: float = param.Number(default=None, allow_None=False)  # type: ignore
     colormap_max: float = param.Number(default=None, allow_None=False)  # type: ignore
+    colormap_min: float = param.Number(default=None, allow_None=False)  # type: ignore
 
     # most appropriate date to visualize (from the time dimension of the dataset)
     date: datetime.datetime = param.Date(allow_None=False)  # type: ignore
@@ -93,7 +92,7 @@ class ZarrDataset(pn.viewable.Viewer):
                 self.crs = ccrs.epsg(crs.to_epsg())
 
     @staticmethod
-    def from_pystac(location: XYT, collection: pystac.Collection) -> "ZarrDataset":
+    def from_pystac(collection: pystac.Collection, location: XYT | None = None) -> "ZarrDataset":
         """
         Create a ZarrDataset from a pystac Collection
 
@@ -111,13 +110,11 @@ class ZarrDataset(pn.viewable.Viewer):
         }
         ```
         """
-        if WPL_RENDER_KEY not in collection.extra_fields:
-            raise ValueError(f"Collection {collection.id} does not have the required field {WPL_RENDER_KEY}")
+        if location is None:
+            extent = Extent.from_pystac(collection.extent)
+            location = XYT(extent=extent)
 
-        try:
-            wpl_render = collection.extra_fields[WPL_RENDER_KEY]
-        except KeyError as e:
-            raise MissingRenderKey from e
+        wpl_render = collection.extra_fields[WPL_RENDER_KEY]
 
         xy_asset_key = next(a for a in wpl_render["assets"] if a.endswith(".xy.zarr"))
         ts_asset_key = next(a for a in wpl_render["assets"] if a.endswith(".ts.zarr"))
@@ -277,7 +274,7 @@ class ZarrDataset(pn.viewable.Viewer):
             color=self.primary_var_name,
             cmap=self.colormap_name,
             clim=(self.colormap_min, self.colormap_max),
-            size=6,
+            size=5,
         )
         elements.append(points)
 
@@ -320,7 +317,7 @@ class ZarrDataset(pn.viewable.Viewer):
     def widgets(self) -> pn.Param:
         return pn.Param(
             self,
-            parameters=["colormap_name", "colormap_min", "colormap_max"],
+            parameters=["colormap_name", "colormap_max", "colormap_min"],
             show_name=False,
             widgets={"colormap_name": pn.widgets.AutocompleteInput},
         )
@@ -380,7 +377,7 @@ class ZarrDataset(pn.viewable.Viewer):
 
         tap.add_subscriber(on_click)
         time_series = attach_stream_to_time_series(tap, time_series)
-        time_series.opts(height=250, min_width=600, responsive=True)
+        time_series.opts(height=300, min_width=600, responsive=True)
 
         # there is an unfortunate bug https://github.com/holoviz/panel/issues/5070
         # which prevents align="center" on dynamically sized elements
@@ -396,10 +393,13 @@ class ZarrDataset(pn.viewable.Viewer):
             pn.Row(
                 pn.pane.HoloViews(
                     time_series,
-                    height=250,
+                    height=300,
                     min_width=600,
                     sizing_mode="stretch_width",
                 ),
+            ),
+            pn.Row(
+                self.download_buttons(),
             ),
             width_policy="max",
         )

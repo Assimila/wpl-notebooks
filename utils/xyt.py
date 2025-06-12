@@ -1,4 +1,5 @@
 import datetime
+from typing import override
 
 import cartopy.crs as ccrs
 import geoviews as gv
@@ -106,24 +107,22 @@ class Extent(param.Parameterized):
         return Extent(spatial=spatial, temporal=temporal)
 
 
-class XYT(pn.viewable.Viewer):
+class XY(pn.viewable.Viewer):
     """
     A utility Parameterized class that contains
 
     - a point of interest (latitude, longitude)
-    - a date of interest
     """
 
     extent: Extent = param.ClassSelector(class_=Extent, default=Extent(), allow_None=False, constant=True)  # type: ignore
 
     latitude: float = param.Number(default=0.0, bounds=(-90, 90), allow_None=False)  # type: ignore
     longitude: float = param.Number(default=0.0, bounds=(-180, 180), allow_None=False)  # type: ignore
-    date: datetime.datetime = param.Date(default=datetime.datetime(2000, 1, 1), allow_None=False)  # type: ignore
 
     def __init__(self, **params):
         super().__init__(**params)
 
-        # set extents on lat, lon, date
+        # set extents on lat, lon
         self.param.latitude.bounds = (
             self.extent.spatial.latitude_min,
             self.extent.spatial.latitude_max,
@@ -131,10 +130,6 @@ class XYT(pn.viewable.Viewer):
         self.param.longitude.bounds = (
             self.extent.spatial.longitude_min,
             self.extent.spatial.longitude_max,
-        )
-        self.param.date.bounds = (
-            self.extent.temporal.t_min,
-            self.extent.temporal.t_max,
         )
 
         # reassign values to trigger validation
@@ -147,10 +142,6 @@ class XYT(pn.viewable.Viewer):
             self.longitude = params["longitude"]
         else:
             self.longitude = x
-        if "date" in params:
-            self.date = params["date"]
-        else:
-            self.date = self.extent.temporal.t_min
 
     def maybe_update_lon_lat(self, longitude, latitude):
         try:
@@ -159,13 +150,6 @@ class XYT(pn.viewable.Viewer):
         except ValueError:
             # fail silently on validation errors, e.g. if the point is outside the bounds
             pass
-
-    def maybe_update_date(self, date):
-        try:
-            self.date = date
-        except ValueError:
-            # fail silently on validation errors, e.g. if the date is outside the bounds
-            raise
 
     @param.depends("longitude", "latitude", watch=False)
     def point(self) -> gv.Points:
@@ -200,7 +184,7 @@ class XYT(pn.viewable.Viewer):
         tap.add_subscriber(self.maybe_update_lon_lat)
         dynamic_map = attach_stream_to_map(tap, dynamic_map)
         return dynamic_map
-    
+
     def widgets(self) -> pn.Param:
         return pn.Param(
             self,
@@ -219,9 +203,8 @@ class XYT(pn.viewable.Viewer):
             },
         )
 
-    def __panel__(self) -> pn.viewable.Viewable:
+    def _panel_contents(self) -> list:
         column = []
-
         # lat, lon
         column.append(
             pn.Param(
@@ -234,17 +217,75 @@ class XYT(pn.viewable.Viewer):
                 },
             ),
         )
-
         column.append(
             pn.pane.HoloViews(
-                self.dynamic_map(), 
+                self.dynamic_map(),
                 width=SIDEBAR_WIDTH - 20,
-                height=200, 
+                height=200,
                 # Prevent this plot from linking with maps in other projections(!)
-                linked_axes=False
+                linked_axes=False,
             ),
         )
+        return column
 
+    def __panel__(self) -> pn.viewable.Viewable:
+        return pn.Column(*self._panel_contents())
+
+
+class XYT(XY):
+    """
+    A utility Parameterized class that contains
+
+    - a point of interest (latitude, longitude)
+    - a date of interest
+    """
+
+    date: datetime.datetime = param.Date(default=datetime.datetime(2000, 1, 1), allow_None=False)  # type: ignore
+
+    def __init__(self, **params):
+        super().__init__(**params)
+
+        # set extents on date
+        self.param.date.bounds = (
+            self.extent.temporal.t_min,
+            self.extent.temporal.t_max,
+        )
+
+        # reassign values to trigger validation
+        if "date" in params:
+            self.date = params["date"]
+        else:
+            self.date = self.extent.temporal.t_min
+
+    def maybe_update_date(self, date):
+        try:
+            self.date = date
+        except ValueError:
+            # fail silently on validation errors, e.g. if the date is outside the bounds
+            raise
+
+    @override
+    def widgets(self) -> pn.Param:
+        return pn.Param(
+            self,
+            parameters=["latitude", "longitude", "date"],
+            show_name=False,
+            widgets={
+                "latitude": pn.widgets.FloatInput,
+                "longitude": pn.widgets.FloatInput,
+                "date": {
+                    "type": pn.widgets.DatetimeSlider,
+                    "start": self.extent.temporal.t_min,
+                    "end": self.extent.temporal.t_max,
+                    "step": 60 * 60,  # 1 hour step
+                    "throttled": True,
+                },
+            },
+        )
+    
+    @override
+    def _panel_contents(self) -> list:
+        column = super()._panel_contents()
         # date
         column.append(
             pn.Param(
@@ -262,5 +303,4 @@ class XYT(pn.viewable.Viewer):
                 },
             ),
         )
-
-        return pn.Column(*column)
+        return column
