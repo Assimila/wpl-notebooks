@@ -1,0 +1,24 @@
+# this is a systemd service file to package dashboard.worldpeatland.org into a background service.
+
+[Unit]
+Description=WorldPeatland Dashboard Service
+After=network.target
+After=nginx.service
+
+[Service]
+User=eouser
+Group=eouser
+
+WorkingDirectory=/home/eouser/wpl-notebooks
+
+ExecStart=/home/eouser/anaconda3/bin/conda run --live-stream -n wpl-notebooks panel serve sites.ipynb collections.ipynb data.ipynb indicators.ipynb --index sites --port 5006 --allow-websocket-origin=dashboard.worldpeatland.org --num-procs 0 --liveness --mem-log-frequency 600000
+
+Restart=always
+RestartSec=5s
+
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=wpl-dashboard
+
+[Install]
+WantedBy=multi-user.target
