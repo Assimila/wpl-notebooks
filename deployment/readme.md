@@ -142,3 +142,8 @@ check the logs of the service:
 ```bash
 sudo journalctl -u wpl-dashboard.service -f
 ```
+
+## Monitor the application
+
+The url `https://dashboard.worldpeatland.org/liveness` is a health check endpoint. 
+You can point tools like [uptimedoctor](www.uptimedoctor.com) at this URL to monitor the application.
