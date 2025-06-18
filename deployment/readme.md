@@ -117,12 +117,14 @@ conda env create -f environment.yml
 ## Serve the panel application
 
 ```bash
-conda run --live-stream -n wpl-notebooks panel serve sites.ipynb collections.ipynb data.ipynb indicators.ipynb --index sites --port 5006 --allow-websocket-origin=dashboard.worldpeatland.org
+PYTHONPATH=$(pwd) conda run --live-stream -n wpl-notebooks panel serve app/*.ipynb --index sites --port 5006 --allow-websocket-origin=dashboard.worldpeatland.org
 ```
 
 Check that the application is running by visiting `https://dashboard.worldpeatland.org`, then stop the server with `Ctrl-C`.
 
 ## Configure the panel application to run as a systemd service
+
+Check the paths in the service file `deployment/wpl-dashboard.service` and adjust them if necessary.
 
 ```bash
 sudo cp deployment/wpl-dashboard.service /etc/systemd/system/wpl-dashboard.service

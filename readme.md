@@ -11,8 +11,12 @@ update requirements.txt
 conda export --from-history > environment.yml
 ```
 
-## serve application
+## run the application in development mode
 
 ```bash
-panel serve sites.ipynb collections.ipynb data.ipynb indicators.ipynb --index sites --dev --show
+PYTHONPATH=$(pwd) panel serve app/*.ipynb --index sites --dev
 ```
+
+## deploy the application
+
+see `deployment/readme.md`
