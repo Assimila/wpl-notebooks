@@ -12,10 +12,11 @@ which is spatially representative over an entire peatland site.
 ## Processing
 
 1. Using the peat extent map as a mask, extract time series from each spatio-temporal dataset.
-   These time series "zonal statistics" provide representative measurements with variance.
+   These time series "zonal statistics" provide representative measurements *with variance*.
 2. Resample / linearly interpolate and align all time series onto a common daily time step.
-3. For each dataset, process the time series into z-scores, which are dimensionless.
-4. Combine the z-scores according to the variable loadings to produce the final peat health indicator.
+3. For each dataset, calculate daily climatologies.
+4. Compute dimensionless z-scores (standard anomalies) for each variable, relative to its climatology.
+5. Combine the z-scores according to the variable loadings to produce the final peat health indicator.
 
 ### Water level
 
@@ -29,7 +30,7 @@ and use this in the peat health indicator.
 \delta_t = | x_t - w^* |
 ```
 
-### z-scores
+### Climatology and z-scores
 
 Firstly compute the *inverse-variance weighted* mean $\mu_{\mathrm{ord}}$
 and standard deviations $\sigma_{\mathrm{ord}}$
@@ -45,10 +46,10 @@ z_t = \frac{x_t - \mu_{\mathrm{ord}(t)}}{ \sigma_{\mathrm{ord}(t)} }
 This results in a z-score, or standard anomaly, that indicates how many standard deviations the observation is
 from the climatological mean.
 
-#### Leap year handling
+#### Leap years
 
 To handle leap years, we drop 29 February from the time series,
-and compute 256 daily climatologies.
+and compute 365 daily climatologies.
 
 When calculating the z-scores, we apply the 28 February climatology to 29 February.
 
@@ -124,9 +125,8 @@ The HDF group "data" should contain a pandas DataFrame with a daily time series 
 Each column corresponds to a variable.
 Values are observations in whatever unit is most appropriate, not z-scores.
 
-The HDF group "variance" should contain a pandas DataFrame with an identical time series indes.
-Each column corresponds to a variable.
-Values equate to the variance of the corresponding observation in the "data" group.
+The HDF group "variance" should contain a pandas DataFrame with an identical time series index and columns to the "data" group.
+Values equate to the variance of the corresponding observation.
 
 ### Variable loadings
 
