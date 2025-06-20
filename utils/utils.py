@@ -63,6 +63,16 @@ def catalog_hash(catalog: pystac.Catalog) -> bytes:
 def get_sub_catalogs(catalog: pystac.Catalog) -> list[pystac.Catalog]:
     return [child for child in catalog.get_children() if child.STAC_OBJECT_TYPE == pystac.STACObjectType.CATALOG]
 
+@pn.cache
+def get_site_catalog(site_id: str) -> pystac.Catalog:
+    """
+    Get the site catalog for a given site ID.
+    """
+    root_catalog = get_root_catalog()
+    child = root_catalog.get_child(site_id)
+    if child is None or child.STAC_OBJECT_TYPE != pystac.STACObjectType.CATALOG:
+        raise ValueError(f"Site catalog for {site_id} not found.")
+    return child
 
 @pn.cache(hash_funcs={pystac.Catalog: catalog_hash})
 def get_collections(catalog: pystac.Catalog) -> list[pystac.Collection]:

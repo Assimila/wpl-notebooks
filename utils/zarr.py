@@ -265,7 +265,7 @@ class ZarrDataset(pn.viewable.Viewer):
 
         curve = hv.Curve(data_series, kdims=["time"], vdims=[self.primary_var_name])
         curve.opts(xlabel="date", ylabel=self.primary_var_name)
-        curve.opts(framewise=True)  # all ylims to update
+        curve.opts(framewise=True)  # allow ylims to update
         elements.append(curve)
 
         points = hv.Scatter(data_series, kdims=["time"], vdims=[self.primary_var_name])

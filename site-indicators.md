@@ -21,7 +21,7 @@ which is spatially representative over an entire peatland site.
 ### Water level
 
 There is a small caveat for the water level variable.
-This stems from the implicit assumption that variables are linearly correlated to peat health.
+This stems from the implicit assumption that variables are monotonically correlated to peat health.
 However, the water level can be both too high and too low.
 Therefore we define a "water level delta" as the absolute deviation from some expert-defined optimal water level $w^*$,
 and use this in the peat health indicator.
@@ -55,7 +55,7 @@ When calculating the z-scores, we apply the 28 February climatology to 29 Februa
 
 ### Variable loadings
 
-Given loadings $l_v$ for each variable $v$ we compute normalised weights $w_v$
+Given loadings $l_v \in [-1, +1]$ for each variable $v$ we compute normalised weights $w_v$
 
 ```math
 w_v = \frac{l_v}{ \sum_{v'} | l_{v'} | }
@@ -119,6 +119,7 @@ Note that GeoJSON is [implicitly](https://datatracker.ietf.org/doc/html/rfc7946#
 ### Time series data
 
 Pre-computed time series data for each spatio-temporal dataset.
+Should have a daily temporal resolution, and cover multiple years - sufficient to compute climatologies.
 Serialised to HDF5 using pandas [to_hdf](https://pandas.pydata.org/docs/reference/api/pandas.DataFrame.to_hdf.html).
 
 The HDF group "data" should contain a pandas DataFrame with a daily time series index. 
