@@ -1,5 +1,6 @@
+import itertools
 import urllib.parse
-from typing import get_args
+from typing import Iterator, get_args
 
 import geoviews as gv
 import holoviews as hv
@@ -95,3 +96,10 @@ def get_biome_colour(biome: str | None) -> str:
         return settings.BIOME_COLOUR[biome]  # type: ignore
     except KeyError:
         return "grey"  # default to grey if biome not found
+
+def colours() -> Iterator[str]:
+    """
+    Yields colours from the default Holoviews colour cycle infinitely.
+    """
+    colours = hv.Cycle.default_cycles["Category10"]
+    yield from itertools.cycle(colours)

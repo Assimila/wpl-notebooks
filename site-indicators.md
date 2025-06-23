@@ -99,16 +99,22 @@ $ tree .
 ### info.json
 
 This file contains metadata about the peat health indicator dataset.
-Name and description are for display purposes in the dashboard.
-The `default_variable_loading` maps to a file in the `variable_loading` directory.
 
 ```json
 {
     "name": <string>,
     "description": <string>,
-    "default_variable_loading": "expert.json"
+    "site_id": <string>,
+    "default_variable_loading_name": <string>
 }
 ```
+
+`name` and `description` are for display purposes in the dashboard.
+
+`site_id` is a unique identifier for the peatland site,
+which should map to a STAC sub-catalog id.
+
+`default_variable_loading_name` should correspond to the `name` attribute of one of the files in the `variable_loading` directory.
 
 ### Peat map (geometry)
 
@@ -131,8 +137,8 @@ Values equate to the variance of the corresponding observation.
 
 ### Variable loadings
 
-We need to be able to specify multiple variable loadings.
-The default variable loading is specified in `info.json` under the key `default_variable_loading`.
+We need to be able to specify multiple variable loadings,
+hence this `variable_loading/` directory contains potentially many JSON files.
 
 Each json file has structure:
 
@@ -148,5 +154,9 @@ Each json file has structure:
     }
 }
 ```
+
+`name` should be unique.
+
+The default variable loading should have `name` corresponding to `default_variable_loading_name` in `info.json`, 
 
 The presence of a key in `optimal_values` indicates that the variable should be transformed to the absolute deviation from the specified value.
