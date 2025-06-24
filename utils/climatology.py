@@ -71,8 +71,8 @@ def daily_climatology(ts: pd.Series, variance: pd.Series) -> pd.DataFrame:
     groups = df.groupby("doy")
 
     # Apply the aggregate function to each group as a whole (not per column)
-    mean = groups.apply(inverse_variance_weighted_mean)
-    _std = groups.apply(std)
+    mean = groups.apply(inverse_variance_weighted_mean, include_groups=False)
+    _std = groups.apply(std, include_groups=False)
 
     return pd.DataFrame({"mean": mean, "std": _std})
 
@@ -127,8 +127,4 @@ def get_climatology_bounds(
     mean.index = ts
     std.index = ts
 
-    return pd.DataFrame({
-        "mean": mean,
-        "lower bound": mean - std, 
-        "upper bound": mean + std
-    })
+    return pd.DataFrame({"mean": mean, "lower bound": mean - std, "upper bound": mean + std})

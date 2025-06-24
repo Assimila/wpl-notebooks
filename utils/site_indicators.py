@@ -154,8 +154,8 @@ class SiteLevelPHI(pn.viewable.Viewer):
             # optimal_values
             if variable_id in predefined.optimal_values:
                 optimal_value = predefined.optimal_values[variable_id]
-                self.variables[variable_id].optimal_value = optimal_value
-                self.variables[variable_id].transform = True
+                # "transactional" update of both parameters
+                self.variables[variable_id].param.update(optimal_value=optimal_value, transform=True)
             else:
                 self.variables[variable_id].transform = False
 
@@ -218,26 +218,42 @@ class SiteLevelPHI(pn.viewable.Viewer):
         return obj
 
     def widgets(self):
-        panes = (
-            pn.Param(
-                variable_loading,
-                parameters=["loading"],
-                widgets={
-                    "loading": {
-                        "type": pn.widgets.FloatSlider,
-                        "step": 0.01,
-                        "bar_color": self.variables[variable_id].param.colour.rx(),
-                        "throttled": True,
-                        # "name": variable_id,
-                    }
-                },
+        """
+        Sliders to control the loading of each variable
+        """
+        sliders = []
+        for variable_id, variable_loading in self.variable_loadings.items():
+            slider = pn.widgets.FloatSlider.from_param(
+                variable_loading.param.loading,
+                step=0.01,
+                bar_color=self.variables[variable_id].param.colour.rx(),
+                throttled=True,
                 name=variable_id,
-                show_labels=False,
-                # show_name=False,
             )
-            for variable_id, variable_loading in self.variable_loadings.items()
+            # fix for https://github.com/holoviz/panel/issues/7997
+            slider.param.value_throttled.constant = False
+
+            sliders.append(slider)
+        return pn.Column(*sliders)
+
+    def predefined_variable_loading_selector(self):
+        """
+        A dropdown list of the names of the predefined variable loadings.
+        Along with a button to apply the selected variable loading configuration.
+        """
+        selector = pn.widgets.Select(
+            options=list(self.predefined_variable_loadings.keys()),
+            value=None,
         )
-        return pn.Column(*panes)
+        apply_button = pn.widgets.Button(name="Apply this set of predefined variable loadings", button_type="primary")
+
+        def apply_callback(event):
+            if selector.value:
+                self.assign_predefined_variable_loadings(selector.value)
+
+        apply_button.on_click(apply_callback)
+
+        return pn.Column(selector, apply_button)
 
     @param.depends("peat_health_indicator", watch=False)
     def phi_view(self):
@@ -264,6 +280,10 @@ class SiteLevelPHI(pn.viewable.Viewer):
         return overlay
 
     def __panel__(self):
+        # IMPORTANT: plot size and layout must be set consistently twice!
+        # 1. on the HoloViews object .opts(responsive=True)
+        # 2. on the pn.pane.HoloViews(sizing_mode=...)
+
         variables = [
             pn.Card(
                 variable.widgets(),
