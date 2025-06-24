@@ -11,6 +11,7 @@ The `utils/` directory contains utility functions used by the notebooks and the 
 ## Prerequisites
 
 - a python environment defined by `environment.yml`
+- `conda env create -f environment.yml`
 - install nbstripout before committing any notebooks: `nbstripout --install`
 
 update requirements.txt
