@@ -249,21 +249,14 @@ class XYT(XY):
     @override
     def _panel_contents(self) -> list:
         column = super()._panel_contents()
-        # date
-        column.append(
-            pn.Param(
-                self,
-                parameters=["date"],
-                show_name=False,
-                widgets={
-                    "date": {
-                        "type": pn.widgets.DatetimeSlider,
-                        "start": self.extent.temporal.t_min,
-                        "end": self.extent.temporal.t_max,
-                        "step": 60 * 60,  # 1 hour step
-                        "throttled": True,
-                    },
-                },
-            ),
+
+        slider = pn.widgets.DatetimeSlider.from_param(
+            self.param.date,
+            step=60 * 60,  # 1 hour step
+            throttled=True,
         )
+        # fix for https://github.com/holoviz/panel/issues/7997
+        slider.param.value_throttled.constant = False
+
+        column.append(slider)
         return column
