@@ -198,7 +198,11 @@ class ZarrDataset(pn.viewable.Viewer):
         if self.uncertainty_var_name:
             da = self.ts_ds[self.uncertainty_var_name].sel(x=x, y=y, method="nearest")
             da.load()  # load data into memory
-            df[self.uncertainty_var_name] = da.to_series()
+            if da.size == 1:
+                # uncertainty layer does not have a time dimension
+                df[self.uncertainty_var_name] = da.item()
+            else:
+                df[self.uncertainty_var_name] = da.to_series()
         elif self.uncertainty_scalar_name and self.uncertainty_scalar_value:
             df[self.uncertainty_scalar_name] = self.uncertainty_scalar_value
         else:
