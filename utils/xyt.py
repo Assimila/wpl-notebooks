@@ -185,24 +185,6 @@ class XY(pn.viewable.Viewer):
         dynamic_map = attach_stream_to_map(tap, dynamic_map)
         return dynamic_map
 
-    def widgets(self) -> pn.Param:
-        return pn.Param(
-            self,
-            parameters=["latitude", "longitude", "date"],
-            show_name=False,
-            widgets={
-                "latitude": pn.widgets.FloatInput,
-                "longitude": pn.widgets.FloatInput,
-                "date": {
-                    "type": pn.widgets.DatetimeSlider,
-                    "start": self.extent.temporal.t_min,
-                    "end": self.extent.temporal.t_max,
-                    "step": 60 * 60,  # 1 hour step
-                    "throttled": True,
-                },
-            },
-        )
-
     def _panel_contents(self) -> list:
         column = []
         # lat, lon
@@ -263,25 +245,6 @@ class XYT(XY):
         except ValueError:
             # fail silently on validation errors, e.g. if the date is outside the bounds
             raise
-
-    @override
-    def widgets(self) -> pn.Param:
-        return pn.Param(
-            self,
-            parameters=["latitude", "longitude", "date"],
-            show_name=False,
-            widgets={
-                "latitude": pn.widgets.FloatInput,
-                "longitude": pn.widgets.FloatInput,
-                "date": {
-                    "type": pn.widgets.DatetimeSlider,
-                    "start": self.extent.temporal.t_min,
-                    "end": self.extent.temporal.t_max,
-                    "step": 60 * 60,  # 1 hour step
-                    "throttled": True,
-                },
-            },
-        )
     
     @override
     def _panel_contents(self) -> list:
