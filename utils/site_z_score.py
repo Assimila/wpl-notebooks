@@ -151,7 +151,6 @@ class ZScore(pn.viewable.Viewer):
             self.time_series,
             kdims=["time"],
         )
-        scatter.redim
         scatter.opts(color=self.colour, size=4)
 
         area = hv.Area(
@@ -192,7 +191,14 @@ class ZScore(pn.viewable.Viewer):
         curve = hv.Curve(
             self.z_score,
             kdims=["time"],
+            vdims=["z-score"],
         )
+        # this redim prevents axes from automatically linking
+        curve: hv.Curve = curve.redim(
+            **{
+                "z-score": f"{self.name} z-score",
+            }
+        )  # type: ignore
         curve.opts(color=self.colour)
 
         scatter = hv.Scatter(

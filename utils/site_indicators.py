@@ -119,10 +119,13 @@ class SiteLevelPHI(pn.viewable.Viewer):
         """
         total_loading = sum(abs(variable_loading.loading) for variable_loading in self.variable_loadings.values())
 
-        self.peat_health_indicator = sum(
+        series: pd.Series = sum(
             variable_loading.loading * self.variables[var_id].z_score / total_loading
             for var_id, variable_loading in self.variable_loadings.items()
         )  # type: ignore
+        series.index.name = "time"  # for holoviews kdims
+
+        self.peat_health_indicator = series
 
     def _update_phi(self, *events: param.parameterized.Event):
         """
@@ -239,7 +242,7 @@ class SiteLevelPHI(pn.viewable.Viewer):
 
         return obj
 
-    def widgets(self):
+    def loading_sliders(self):
         """
         Sliders to control the loading of each variable
         """
@@ -311,6 +314,7 @@ class SiteLevelPHI(pn.viewable.Viewer):
             xlabel="date",
             ylabel="Peat Health Indicator",
         )
+        overlay.opts(framewise=True)  # allow ylims to update
 
         return overlay
 
@@ -329,12 +333,11 @@ class SiteLevelPHI(pn.viewable.Viewer):
 
         return overlay
 
-    def __panel__(self):
-        # IMPORTANT: plot size and layout must be set consistently twice!
-        # 1. on the HoloViews object .opts(responsive=True)
-        # 2. on the pn.pane.HoloViews(sizing_mode=...)
-
-        variables = [
+    def variable_cards(self):
+        """
+        One panel Card per variable.
+        """
+        cards = [
             pn.Card(
                 variable.widgets(),
                 variable,
@@ -344,7 +347,12 @@ class SiteLevelPHI(pn.viewable.Viewer):
             )
             for variable in self.variables.values()
         ]
+        return pn.Column(*cards)
 
+    def __panel__(self):
+        # IMPORTANT: plot size and layout must be set consistently twice!
+        # 1. on the HoloViews object .opts(responsive=True)
+        # 2. on the pn.pane.HoloViews(sizing_mode=...)
         HEIGHT = 400
         MIN_WIDTH = 600
 
@@ -356,13 +364,12 @@ class SiteLevelPHI(pn.viewable.Viewer):
         )
 
         return pn.Column(
-            *variables,
             pn.pane.HoloViews(
                 phi_view,
                 sizing_mode="stretch_width",
                 height=HEIGHT,
                 min_width=MIN_WIDTH,
-            ),
+            )
         )
 
 

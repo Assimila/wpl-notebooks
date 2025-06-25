@@ -100,7 +100,10 @@ def standard_anomaly(ts: pd.Series, climatology: pd.DataFrame) -> pd.Series:
     mean.index = ts.index
     std.index = ts.index
 
-    return (ts - mean) / std
+    z = (ts - mean) / std
+    z.name = "z-score"
+
+    return z
 
 
 def get_climatology_bounds(
