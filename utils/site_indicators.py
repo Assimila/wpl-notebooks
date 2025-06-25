@@ -1,4 +1,5 @@
 import os
+from collections import defaultdict
 from typing import Annotated
 
 import cartopy.crs as ccrs
@@ -10,13 +11,13 @@ import param
 import pydantic
 import shapely
 
-from . import utils
+from . import settings, utils
 from .site_z_score import ZScore
 
 
 class InfoModel(pydantic.BaseModel):
     """
-    info.json
+    Encapsulates the info.json file for a site-level peat health indicator.
     """
 
     name: str
@@ -32,8 +33,10 @@ type loading = Annotated[float, pydantic.Field(ge=-1.0, le=1.0)]
 class PredefinedVariableLoading(pydantic.BaseModel):
     """
     Encapsulates a single variable loading configuration.
-    As recommended by SVD (Singular Value Decomposition),
-    or an expert opinion.
+    for a site-level peat health indicator.
+
+    The presence of a key in `optimal_values` indicates that the variable should be transformed
+    to the absolute deviation from the specified value.
     """
 
     name: str
@@ -261,7 +264,7 @@ class SiteLevelPHI(pn.viewable.Viewer):
         When one is selected, display the description of the selected variable loading configuration.
         A button to apply the selected variable loading configuration.
         """
-        
+
         def get_description(predefined_variable_loading_name: str | None) -> str:
             placeholder = "Select a predefined variable loading"
             if predefined_variable_loading_name is None:
@@ -310,7 +313,7 @@ class SiteLevelPHI(pn.viewable.Viewer):
         )
 
         return overlay
-    
+
     def map(self):
         """
         GeoViews plot in google web mercator projection with a basemap layer.
@@ -361,3 +364,45 @@ class SiteLevelPHI(pn.viewable.Viewer):
                 min_width=MIN_WIDTH,
             ),
         )
+
+
+@pn.cache
+def all_site_level_peat_health_indicators() -> dict[str, dict[str, str]]:
+    """
+    Search `SITE_LEVEL_PHI_DIR` for site-level peat health indicators.
+
+    Returns: mapping from site-id -> extent name -> subdirectory.
+    """
+    if not os.path.isdir(settings.SITE_LEVEL_PHI_DIR):
+        raise NotADirectoryError(settings.SITE_LEVEL_PHI_DIR)
+
+    ret = defaultdict(dict)
+
+    for item in os.listdir(settings.SITE_LEVEL_PHI_DIR):
+        item_path = os.path.join(settings.SITE_LEVEL_PHI_DIR, item)
+        if not os.path.isdir(item_path):
+            continue
+        subdir = item_path
+        info_file = os.path.join(subdir, "info.json")
+        if not os.path.isfile(info_file):
+            continue
+        with open(info_file, "r") as f:
+            info = InfoModel.model_validate_json(f.read())
+        ret[info.site_id][info.name] = subdir
+
+    return ret
+
+
+# deepcopy because mutable objects are cached
+@utils.deepcopy
+@pn.cache
+def get_phi(site_id: str, extent_name: str) -> SiteLevelPHI | None:
+    """
+    Get a SiteLevelPHI instance for a given site_id and name.
+    """
+    phis = all_site_level_peat_health_indicators()
+    try:
+        directory = phis[site_id][extent_name]
+    except KeyError:
+        return None
+    return SiteLevelPHI.from_directory(directory)

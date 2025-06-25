@@ -1,4 +1,3 @@
-import os
 from typing import Literal
 
 # this is a custom field in STAC collection metadata
@@ -25,9 +24,10 @@ type RouteInfo = tuple[RouteURL, RouteParams]
 # WARNING: when using `panel serve` these routes are defined by the filenames!
 ROUTES: dict[RouteName, RouteInfo] = {
     "sites": ("/sites", []),
-    "indicators": ("/indicators", ["site-id"]),
-    "data": ("/data", ["site-id", "collection-id"]),
     "collections": ("/collections", ["site-id"]),
+    "data": ("/data", ["site-id", "collection-id"]),
+    "indicators": ("/indicators", ["site-id"]),
+    "site-indicator": ("/site-indicator", ["site-id", "indicator-id"]),
 }
 
 # additional metadata key for STAC collection

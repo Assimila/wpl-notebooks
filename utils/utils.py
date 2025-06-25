@@ -1,6 +1,8 @@
+import copy
+import functools
 import itertools
 import urllib.parse
-from typing import Iterator, get_args
+from typing import Callable, Iterator, get_args
 
 import geoviews as gv
 import holoviews as hv
@@ -64,6 +66,7 @@ def catalog_hash(catalog: pystac.Catalog) -> bytes:
 def get_sub_catalogs(catalog: pystac.Catalog) -> list[pystac.Catalog]:
     return [child for child in catalog.get_children() if child.STAC_OBJECT_TYPE == pystac.STACObjectType.CATALOG]
 
+
 @pn.cache
 def get_site_catalog(site_id: str) -> pystac.Catalog:
     """
@@ -74,6 +77,7 @@ def get_site_catalog(site_id: str) -> pystac.Catalog:
     if child is None or child.STAC_OBJECT_TYPE != pystac.STACObjectType.CATALOG:
         raise ValueError(f"Site catalog for {site_id} not found.")
     return child
+
 
 @pn.cache(hash_funcs={pystac.Catalog: catalog_hash})
 def get_collections(catalog: pystac.Catalog) -> list[pystac.Collection]:
@@ -88,6 +92,7 @@ def get_biome(site: pystac.Catalog) -> settings.Biome | None:
             return biome
     return None
 
+
 def get_biome_colour(biome: str | None) -> str:
     """
     Get the colour associated with a biome.
@@ -97,9 +102,21 @@ def get_biome_colour(biome: str | None) -> str:
     except KeyError:
         return "grey"  # default to grey if biome not found
 
+
 def colours() -> Iterator[str]:
     """
     Yields colours from the default Holoviews colour cycle infinitely.
     """
     colours = hv.Cycle.default_cycles["Category10"]
     yield from itertools.cycle(colours)
+
+
+def deepcopy[**P, R](func: Callable[P, R]) -> Callable[P, R]:
+    """
+    Decorator that returns a deepcopy of the inner function's return value.
+    """
+    @functools.wraps(func)
+    def wrapper(*args: P.args, **kwargs: P.kwargs) -> R:
+        result = func(*args, **kwargs)
+        return copy.deepcopy(result)
+    return wrapper
