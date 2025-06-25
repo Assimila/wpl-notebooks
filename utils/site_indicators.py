@@ -239,13 +239,26 @@ class SiteLevelPHI(pn.viewable.Viewer):
     def predefined_variable_loading_selector(self):
         """
         A dropdown list of the names of the predefined variable loadings.
-        Along with a button to apply the selected variable loading configuration.
+        When one is selected, display the description of the selected variable loading configuration.
+        A button to apply the selected variable loading configuration.
         """
+        
+        def get_description(predefined_variable_loading_name: str | None) -> str:
+            placeholder = "Select a predefined variable loading"
+            if predefined_variable_loading_name is None:
+                return placeholder
+            try:
+                return self.predefined_variable_loadings[predefined_variable_loading_name].description
+            except KeyError:
+                return placeholder
+
         selector = pn.widgets.Select(
-            options=list(self.predefined_variable_loadings.keys()),
+            options=[None] + list(self.predefined_variable_loadings.keys()),
             value=None,
+            name="Predefined variable loadings",
         )
-        apply_button = pn.widgets.Button(name="Apply this set of predefined variable loadings", button_type="primary")
+        description = pn.pane.Str(param.bind(get_description, selector.param.value))
+        apply_button = pn.widgets.Button(name="Apply predefined variable loadings", button_type="primary")
 
         def apply_callback(event):
             if selector.value:
@@ -253,7 +266,7 @@ class SiteLevelPHI(pn.viewable.Viewer):
 
         apply_button.on_click(apply_callback)
 
-        return pn.Column(selector, apply_button)
+        return pn.Column(selector, description, apply_button)
 
     @param.depends("peat_health_indicator", watch=False)
     def phi_view(self):
