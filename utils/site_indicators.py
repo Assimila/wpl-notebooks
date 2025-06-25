@@ -282,7 +282,7 @@ class SiteLevelPHI(pn.viewable.Viewer):
             value=None,
             name="Predefined variable loadings",
         )
-        description = pn.pane.Str(param.bind(get_description, selector.param.value))
+        description = pn.pane.Markdown(param.bind(get_description, selector.param.value))
         apply_button = pn.widgets.Button(name="Apply predefined variable loadings", button_type="primary")
 
         def apply_callback(event):
