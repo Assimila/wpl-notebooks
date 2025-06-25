@@ -1,11 +1,14 @@
 import os
 from typing import Annotated
 
+import cartopy.crs as ccrs
+import geoviews as gv
 import holoviews as hv
 import pandas as pd
 import panel as pn
 import param
 import pydantic
+import shapely
 
 from . import utils
 from .site_z_score import ZScore
@@ -49,23 +52,21 @@ class SiteLevelPHI(pn.viewable.Viewer):
 
     See `site-indicators.md` for more information about the data that drives this visualization.
 
-    ```bash
-    $ tree .
-    .
-    ├── info.json
-    ├── peat_extent.geojson
-    ├── time_series.h5
-    └── variable_loading
-        ├── expert.json
-        ├── svd.json
-        └── ...
-    ```
+    Instances of the class may be a few MB in size,
+    depending on the number of variables and the length of the time series.
     """
 
     # info.json
     name: str = param.String(allow_None=False, constant=True)  # type: ignore
     description: str = param.String(allow_None=False, constant=True)  # type: ignore
     site_id: str = param.String(allow_None=False, constant=True)  # type: ignore
+
+    peat_extent: shapely.geometry.base.BaseGeometry = param.ClassSelector(
+        class_=shapely.geometry.base.BaseGeometry,
+        allow_None=False,
+        constant=True,
+        doc="Geospatial extent of mapped peat",
+    )  # type: ignore
 
     variables: dict[str, ZScore] = param.Dict(
         allow_None=False,
@@ -142,7 +143,7 @@ class SiteLevelPHI(pn.viewable.Viewer):
 
         This is a no-op if `variable_loading_name` is not found in `self.predefined_variable_loadings`.
         """
-        # TODO: prevent events from firing during this operation
+        # TODO: prevent events from firing during this operation?
 
         try:
             predefined = self.predefined_variable_loadings[variable_loading_name]
@@ -168,6 +169,21 @@ class SiteLevelPHI(pn.viewable.Viewer):
 
     @classmethod
     def from_directory(cls, directory: str) -> "SiteLevelPHI":
+        """
+        Create a SiteLevelPHI instance from a directory containing the required files.
+
+        ```bash
+        $ tree .
+        .
+        ├── info.json
+        ├── peat_extent.geojson
+        ├── time_series.h5
+        └── variable_loading
+            ├── expert.json
+            ├── svd.json
+            └── ...
+        ```
+        """
         if not os.path.isdir(directory):
             raise NotADirectoryError(directory)
 
@@ -176,6 +192,8 @@ class SiteLevelPHI(pn.viewable.Viewer):
             info = InfoModel.model_validate_json(f.read())
 
         extent_file = os.path.join(directory, "peat_extent.geojson")
+        with open(extent_file) as f:
+            peat_extent = shapely.from_geojson(f.read())
 
         timeseries_file = os.path.join(directory, "time_series.h5")
         data_df = pd.read_hdf(timeseries_file, key="data")
@@ -209,6 +227,7 @@ class SiteLevelPHI(pn.viewable.Viewer):
             name=info.name,
             description=info.description,
             site_id=info.site_id,
+            peat_extent=peat_extent,
             variables=variables,
             predefined_variable_loadings=predefined_variable_loadings,
         )
@@ -289,6 +308,21 @@ class SiteLevelPHI(pn.viewable.Viewer):
             xlabel="date",
             ylabel="Peat Health Indicator",
         )
+
+        return overlay
+    
+    def map(self):
+        """
+        GeoViews plot in google web mercator projection with a basemap layer.
+        Shows the peat_extent geometry.
+        """
+        basemap = gv.tile_sources.OSM
+
+        peat_extent = gv.Polygons(self.peat_extent)
+        peat_extent.opts(xaxis=None, yaxis=None, xlabel="", ylabel="")
+
+        overlay = basemap * peat_extent
+        overlay.opts(projection=ccrs.GOOGLE_MERCATOR)
 
         return overlay
 

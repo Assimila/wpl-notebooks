@@ -163,7 +163,7 @@ class XY(pn.viewable.Viewer):
     @param.depends("longitude", "latitude", watch=False)
     def map(self) -> gv.Overlay:
         """
-        GeoViews plot in Google web mercator projection with a basemap layer.
+        GeoViews plot in google web mercator projection with a basemap layer.
         Shows the bounding box of the extent, and the point of interest.
         """
         basemap = gv.tile_sources.OSM
