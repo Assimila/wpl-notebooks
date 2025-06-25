@@ -114,6 +114,8 @@ This file contains metadata about the peat health indicator dataset.
 `site_id` is a unique identifier for the peatland site,
 which should map to a STAC sub-catalog id.
 
+The combination of `site_id` and `name` should be unique.
+
 `default_variable_loading_name` should correspond to the `name` attribute of one of the files in the `variable_loading` directory.
 
 ### Peat map (geometry)

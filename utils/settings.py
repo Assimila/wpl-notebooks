@@ -1,3 +1,4 @@
+import os
 from typing import Literal
 
 # this is a custom field in STAC collection metadata
@@ -40,3 +41,7 @@ BIOME_COLOUR: dict[Biome, str] = {"boreal": "mediumturquoise", "temperate": "gol
 
 # default is 330
 SIDEBAR_WIDTH = 330
+
+
+# should be an absolute path to the directory containing all site-level peat health indicators
+SITE_LEVEL_PHI_DIR = os.environ.get("SITE_LEVEL_PHI_DIR", None)

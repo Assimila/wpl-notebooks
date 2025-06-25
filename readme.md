@@ -20,6 +20,14 @@ update requirements.txt
 conda export --from-history > environment.yml
 ```
 
+## Environment variables
+
+`SITE_LEVEL_PHI_DIR` should be an absolute path to a directory where data for the site-level peat health indicators is stored.
+This directory should contain one subdirectory per peat extent map, e.g. degero-extent-1, degero-extent-2, etc.
+See `site-indicators.md` for more information.
+
+TODO: add this to the deployment instructions.
+
 ## run jupyter
 
 ```bash
