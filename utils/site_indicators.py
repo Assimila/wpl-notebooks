@@ -323,10 +323,10 @@ class SiteLevelPHI(pn.viewable.Viewer):
         GeoViews plot in google web mercator projection with a basemap layer.
         Shows the peat_extent geometry.
         """
-        basemap = gv.tile_sources.OSM
+        basemap = gv.tile_sources.EsriImagery
 
         peat_extent = gv.Polygons(self.peat_extent)
-        peat_extent.opts(xaxis=None, yaxis=None, xlabel="", ylabel="")
+        peat_extent.opts(xaxis=None, yaxis=None, xlabel="", ylabel="", color="gold", line_color=None, alpha=0.7)
 
         overlay = basemap * peat_extent
         overlay.opts(projection=ccrs.GOOGLE_MERCATOR)
