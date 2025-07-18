@@ -5,7 +5,7 @@ which is spatially representative over an entire peatland site.
 
 ## Inputs
 
-1. Peat extent map (geometry), classifying the spatial extent of peat to monitor across the site.
+1. Peat extent map (geometry or raster pixel mask), classifying the spatial extent of peat to monitor across the site.
 2. Spatio-temporal datasets (e.g. land surface temperature, leaf area index, water level, etc.).
 3. Variable loadings from expert knowledge or singular value decomposition.
 
@@ -88,7 +88,7 @@ This is a directory structure that contains the following
 $ tree .
 .
 ├── info.json
-├── peat_extent.geojson
+├── peat_extent.tiff
 ├── time_series.h5
 └── variable_loading
     ├── expert.json
@@ -118,11 +118,14 @@ The combination of `site_id` and `name` should be unique.
 
 `default_variable_loading_name` should correspond to the `name` attribute of one of the files in the `variable_loading` directory.
 
-### Peat map (geometry)
+### Peat map (peat_extent.tiff)
 
-A GeoJSON file containing a single MultiPolygon geometry.
-The geometry may be quite complex.
-Note that GeoJSON is [implicitly](https://datatracker.ietf.org/doc/html/rfc7946#section-4) in WGS84 (EPSG:4326) coordinate reference system.
+A GeoTIFF file containing a single band.
+This is a pixel mask of peat extent,
+where pixels with a value of 1 indicate peat and 0 indicate non-peat.
+
+- Should have an integer dtype such as BYTE (8-bit unsigned integer).
+- Should have EPSG:4326 (WGS84) coordinate reference system.
 
 ### Time series data
 

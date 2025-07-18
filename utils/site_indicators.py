@@ -9,7 +9,9 @@ import pandas as pd
 import panel as pn
 import param
 import pydantic
-import shapely
+import rioxarray  # noqa: F401
+import xarray as xr
+from matplotlib.colors import ListedColormap
 
 from . import settings, utils
 from .site_z_score import ZScore
@@ -64,11 +66,8 @@ class SiteLevelPHI(pn.viewable.Viewer):
     description: str = param.String(allow_None=False, constant=True)  # type: ignore
     site_id: str = param.String(allow_None=False, constant=True)  # type: ignore
 
-    peat_extent: shapely.geometry.base.BaseGeometry = param.ClassSelector(
-        class_=shapely.geometry.base.BaseGeometry,
-        allow_None=False,
-        constant=True,
-        doc="Geospatial extent of mapped peat",
+    peat_extent: xr.DataArray = param.ClassSelector(
+        class_=xr.DataArray, label="Peat extent pixel mask", allow_None=False, constant=True
     )  # type: ignore
 
     variables: dict[str, ZScore] = param.Dict(
@@ -182,7 +181,7 @@ class SiteLevelPHI(pn.viewable.Viewer):
         $ tree .
         .
         ├── info.json
-        ├── peat_extent.geojson
+        ├── peat_extent.tiff
         ├── time_series.h5
         └── variable_loading
             ├── expert.json
@@ -197,9 +196,16 @@ class SiteLevelPHI(pn.viewable.Viewer):
         with open(info_file) as f:
             info = InfoModel.model_validate_json(f.read())
 
-        extent_file = os.path.join(directory, "peat_extent.geojson")
-        with open(extent_file) as f:
-            peat_extent = shapely.from_geojson(f.read())
+        extent_file = os.path.join(directory, "peat_extent.tiff")
+        da = xr.open_dataarray(
+            extent_file,
+            engine="rasterio",
+            default_name="peat_extent",
+        )
+        da = da.squeeze("band", drop=True)
+        # check crs is EPSG:4326
+        if da.rio.crs.to_epsg() != 4326:
+            raise ValueError(f"Expected EPSG:4326 CRS for peat extent, got {da.rio.crs}")
 
         timeseries_file = os.path.join(directory, "time_series.h5")
         data_df = pd.read_hdf(timeseries_file, key="data")
@@ -233,7 +239,7 @@ class SiteLevelPHI(pn.viewable.Viewer):
             name=info.name,
             description=info.description,
             site_id=info.site_id,
-            peat_extent=peat_extent,
+            peat_extent=da,
             variables=variables,
             predefined_variable_loadings=predefined_variable_loadings,
         )
@@ -321,14 +327,21 @@ class SiteLevelPHI(pn.viewable.Viewer):
     def map(self):
         """
         GeoViews plot in google web mercator projection with a basemap layer.
-        Shows the peat_extent geometry.
+        Shows the peat_extent pixel mask.
         """
         basemap = gv.tile_sources.EsriImagery
 
-        peat_extent = gv.Polygons(self.peat_extent)
-        peat_extent.opts(xaxis=None, yaxis=None, xlabel="", ylabel="", color="gold", line_color=None, alpha=0.7)
+        # mask non-peat with NaN
+        peat_extent = self.peat_extent.where(self.peat_extent == 1)
 
-        overlay = basemap * peat_extent
+        peat_colour = "gold"
+        cmap = ListedColormap([peat_colour])
+
+        image = gv.Image(peat_extent, kdims=["x", "y"], crs=ccrs.PlateCarree())
+        image.opts(projection=ccrs.GOOGLE_MERCATOR)
+        image.opts(alpha=0.6, cmap=cmap)
+
+        overlay = basemap * image
         overlay.opts(projection=ccrs.GOOGLE_MERCATOR)
 
         return overlay

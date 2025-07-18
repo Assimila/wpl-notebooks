@@ -11,6 +11,7 @@ dependencies:
   - pytables
   - xarray
   - rioxarray
+  - rio-cogeo
   - dask
   - zarr<3
   - requests
