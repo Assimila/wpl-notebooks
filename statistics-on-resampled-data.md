@@ -24,24 +24,24 @@ Pixel weights are defined as
 w_i = \frac{1}{\sigma_i^2}
 ```
 
-With the weighted mean
+Where $\sigma_i$ is the uncertainty of the data value $x_i$ at pixel $i$.
+The weighted mean has the form
 
 ```math
 \bar{x}_w = \frac{\sum_i w_i x_i}{\sum_i w_i}
 ```
 
-And the uncertainty on the weighted mean given by
+In the case of independent data the uncertainty on the weighted mean is given by
 
 ```math
 \sigma_{w}^2 = \frac{1}{\sum_i w_i}
 ```
 
-However, this is in the case of independent data values.
-This assumption does not hold for spatially resampled data.
+However, for spatially resampled data, this assumption of independence does not hold.
 
 ## Correlated data
 
-When data are spatially resampled from the native resolution to a higher resolution, additional pixels are created.
+When data are spatially resampled from the native resolution to a higher resolution, we refer to the original pixels as "native pixels" and the new, higher resolution pixels as "sub-pixels".
 These sub-pixels are not independent of each other, and so the uncertainty on the weighted mean must be adjusted to account for this correlation.
 
 The full expression for the uncertainty on the weighted mean in the presence of correlated data is given by
@@ -60,7 +60,7 @@ and $\rho_{ij}$ is the correlation coefficient between sub-pixels $i$ and $j$.
 
 ## Example
 
-As a toy example, consider the case of a 3 sub-pixel mask, where sub-pixels 1 and 2 are correlated, and sub-pixel 3 is independent of the first two.
+As a toy example, consider the case where the pixel mask covers 3 sub-pixels, where sub-pixels 1 and 2 are correlated, and sub-pixel 3 is independent of the first two.
 
 Here $w_1 = w_2$, $\sigma_1 = \sigma_2$, and the correlation coefficients are given by
 
@@ -95,7 +95,9 @@ which is the ratio of sub-pixels per native resolution pixel.
 
 ## Example 2
 
-Consider the case of a 2x2 resampling $r=4$, with a 5 sub-pixel mask, where the weights $w$ of all sub-pixels are equal. 
+Consider the case of a 2x2 resampling $r=4$,
+where the pixel mask covers 5 sub-pixels, 
+and where the weights $w$ of all sub-pixels are equal. 
 In this case, we could assume that all 5 sub-pixels belong to the same native pixel (as above).
 But since we know the resampling ratio $r$, we can improve the upper bound by 
 noting that a maximum of $r=4$ sub-pixels can be correlated. 
