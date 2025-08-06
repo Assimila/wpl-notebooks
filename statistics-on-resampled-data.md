@@ -112,3 +112,7 @@ the upper bound on the uncertainty of the weighted mean can be expressed as
 ```math
 \sigma_{w}^2 \leq \frac{ \sum_w ( m_w r^2 + c_w^2 ) w }{ ( \sum_i w_i )^2 }
 ```
+
+## Caveats
+
+- This approach operates on unique values, which will only hold if there is no interpolation during resampling
