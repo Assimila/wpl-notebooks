@@ -38,21 +38,6 @@ def read_stac_data(site, variable):
         **asset.ext.xarray.open_kwargs,  # type: ignore
     )
 
-    # If variable is water-level transform the 95% confidence interval
-    # into the standard error. Since A 95% confidence interval corresponds
-    # to approximately 1.96 standard deviations, let's get the standard
-    # error dividing by 1.96...
-    if variable == 'water-level':
-        ds['confidence_interval'] /= 1.96
-
-        # TODO: REMOVE this, I'm getting the variable name from a hardcoded list!
-        # Sorry Sam, could we make consistent the STAC variable name and 
-        # the Dataset variable name? or even better get the asset name from the metadata
-        ds = ds.rename({'water_level' : 'water-level'})
-
-    if variable == 'surface-displacement':
-        ds = ds.rename({'displacement' : 'surface-displacement'})
-
     return ds
 
 def read_data_and_uncertainty(data_path, uncertainty_path):
@@ -119,8 +104,7 @@ def get_pixel_indices_within_geometry(dataarray, shapefile_path):
 
     return indices
 
-def get_weighted_mean_and_uncertainties(data, variable_name, uncertainty_name,
-                                        spatial_ratio, indices):
+def get_weighted_mean_and_uncertainties(data, variable_metadata, indices):
     """
     Calculate weighted mean and variance for the data at the specified indices using uncertainty as weights.
     Weights are computed as the inverse of the square of uncertainty values.
@@ -130,11 +114,14 @@ def get_weighted_mean_and_uncertainties(data, variable_name, uncertainty_name,
     if len(indices) == 0:
         return None, None
 
+    uncertainty_name = variable_metadata[1]
+    variable_name = variable_metadata[2]
+    spatial_ratio = variable_metadata[3]
+
     weighted_means = []
     uncertainties = []
 
-    # for i in range(data[variable_name].shape[0]):
-    for i in range(100,102):
+    for i in range(data[variable_name].shape[0]):
 
         print(f"Processing time step {i+1}/{data[variable_name].shape[0]}...")
 
@@ -142,13 +129,21 @@ def get_weighted_mean_and_uncertainties(data, variable_name, uncertainty_name,
         data_vals = data[variable_name].values[i, indices[:, 0], indices[:, 1]]
 
         # TODO: find a better solution for this
-        if variable_name == 'water-level':
+        if variable_name == 'water_level':
             unc_vals = data[uncertainty_name].values[indices[:, 0], indices[:, 1]]
-        elif variable_name == 'surface-displacement':
+            # If variable is water-level transform the 95% confidence interval
+            # into the standard error. Since A 95% confidence interval corresponds
+            # to approximately 1.96 standard deviations, let's get the standard
+            # error dividing by 1.96...
+            unc_vals /= 1.96
+
+        elif variable_name == 'displacement':
+            # TODO: Resampling to daily data should be done when STACking the
+            # data rather than here
             # TODO: Set the uncertainties from INGV info and compute the zonal
             # stats without unique values...
             unc_vals = np.zeros_like(data_vals)
-            unc_vals[:] = 2.0
+            unc_vals = xr.where(data_vals, 2.0, np.nan)
         else:
             unc_vals = data[uncertainty_name].values[i, indices[:, 0], indices[:, 1]]
 
@@ -188,7 +183,7 @@ def get_weighted_mean_and_uncertainties(data, variable_name, uncertainty_name,
     # Create a DataFrame to stores the weighted means, variances, and uncertainty ratios
     df = pd.DataFrame({"weighted_mean": weighted_means,
                        "uncertainty": uncertainties},
-                       index=data['time'].values[100:102])
+                       index=data['time'].values)
     
     return df
 
@@ -227,31 +222,33 @@ def create_plot(weighted_mean, weighted_variance, variable):
 
     plt.savefig(f"/tmp/{variable}_weighted_mean_and_uncert.png", dpi=150)
 
-def extract_zonal_stats(variable_name, uncertainty, spatial_ratio,
-                        site, classification_fname, plot=False):
+def extract_zonal_stats(variable_metadata, site,
+                        classification_fname, plot=False):
     """
     Extract zonal stats using associated uncertainties
         The stats then will be linearly interpolated to create
         synthetic daily data
     """
     # Read data and associated uncertainty
-    data = read_stac_data(variable=variable_name, site=site)
+    asset_name = variable_metadata[0]
+    data = read_stac_data(variable=asset_name, site=site)
 
     # Get the indices where the classification is 1
     indices = get_pixel_indices_within_classification(classification_fname)
 
     # Compute stats
     weighted_stats = get_weighted_mean_and_uncertainties(data=data,
-                         variable_name=variable_name,
-                         uncertainty_name=uncertainty_name,
-                         spatial_ratio=spatial_ratio, indices=indices)
+                         variable_metadata=variable_metadata,
+                         indices=indices)
 
-    # Linear interpolation to create synthetic daily data
+    # Linear interpolation to create synthetic daily dates, normalized first
+    # to avoid having hours:minutes in the time dimension
+    weighted_stats.index = weighted_stats.index.normalize() 
     weighted_mean = weighted_stats['weighted_mean'].resample('D').interpolate('linear')
     uncertainty = weighted_stats['uncertainty'].resample('D').interpolate('linear')
 
     if plot == True:
-        create_plot(weighted_mean, uncertainty, variable_name)
+        create_plot(weighted_mean, uncertainty, asset_name)
 
     return weighted_mean, uncertainty
 
@@ -271,29 +268,29 @@ if __name__ == "__main__":
         # e.g. /wp_data/sites/Degero/WhatSARPeat/WhatSARPeat2024_Degero.tif
         classification_fname = sys.argv[2]
 
-        # Variable name, uncertainty name, spatial ratio
+        # Asset name, uncertainty name, variable name, spatial ratio
         # Spatial ratio is nominal spatial res /  20
         # since 20m is the spatial res of the stored products
-        variables = [['lai', 'lai_std_dev', 25],
-                     ['fpar', 'fpar_std_dev', 25],
-                     ['albedo', 'albedo_std_dev', 25],
-                      # ['evi', 'evi_std', 50],
-                      # ['lst_day', 'lst_day_std_dev]', 50],
-                      # ['lst_night', 'lst_night_std_dev', 50],
-                      # ['lst_diurnal_range', 'lst_diurnal_range_std_dev', 50],
-                     ['surface-displacement', 'surface_displacement_dev', 1.0],
-                     ['water-level', 'confidence_interval', 5]]
+        variables = [['lai', 'lai_std_dev', 'lai', 25],
+                     ['fpar', 'fpar_std_dev', 'fpar', 25],
+                     ['albedo', 'albedo_std_dev', 'albedo', 25],
+                     ['evi', 'evi_std_dev', 'evi', 50],
+                     ['lst-day', 'lst_day_std_dev', 'lst_day', 50],
+                     ['lst-night', 'lst_night_std_dev', 'lst_night', 50],
+                     ['lst-diurnal-range', 'lst_diurnal_range_std_dev', 'lst_diurnal_range', 50],
+                     ['surface-displacement', 'surface_displacement_dev', 'displacement', 1.0],
+                     ['water-level', 'confidence_interval', 'water_level', 5]]
 
         data = pd.DataFrame()
         uncertainty = pd.DataFrame()
 
-        for variable_name, uncertainty_name, spatial_ratio in variables:
-            print(f"Processing {variable_name}...")
-            w_mu, w_unc = extract_zonal_stats(variable_name, uncertainty_name, 
-                                              spatial_ratio, site,
-                                              classification_fname, plot=True)
+        for variable_metadata in variables:
+            print(f"Processing {variable_metadata[0]}...")
+            w_mu, w_unc = extract_zonal_stats(variable_metadata,
+                              site, classification_fname, plot=True)
             print(w_mu, w_unc)
 
+            variable_name = variable_metadata[2]
             data[variable_name] = w_mu
             uncertainty[variable_name] = w_unc
 
