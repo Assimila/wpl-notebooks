@@ -13,10 +13,12 @@ import rasterio.crs
 import rioxarray  # noqa: F401
 import xarray as xr
 from holoviews import streams
+from matplotlib.colors import ListedColormap
 from rasterio.io import MemoryFile
 
+from . import settings
+from .cog import Layer
 from .colour_maps import get_colour_maps
-from .settings import POINT_OF_INTEREST_OPTS, WPL_RENDER_KEY
 from .utils import attach_stream_to_map, attach_stream_to_time_series
 from .xyt import XYT, Extent
 
@@ -27,6 +29,9 @@ class ZarrDataset(pn.viewable.Viewer):
 
     It is assumed that you have two datasets,
     one chunked for spatial reads (xy_ds) and one chunked for temporal reads (ts_ds).
+
+    In the map view, there is an option to overlay a peat extent mask,
+    which must be provided in the same CRS.
     """
 
     location: XYT = param.ClassSelector(class_=XYT, label="Region of interest", allow_None=False, constant=True)  # type: ignore
@@ -56,6 +61,12 @@ class ZarrDataset(pn.viewable.Viewer):
     crs: ccrs.CRS = param.ClassSelector(
         class_=ccrs.CRS, default=None, allow_None=False, doc="native coordinate reference system", constant=True
     )  # type: ignore
+
+    peat_extent_da: xr.DataArray | None = param.ClassSelector(
+        class_=xr.DataArray, doc="peat extent map", allow_None=True, constant=True
+    )  # type: ignore
+
+    overlay_peat_extent: bool = param.Boolean(default=False, label="Overlay the WorldPeatland peat extent map")  # type: ignore
 
     def __init__(self, **params):
         super().__init__(**params)
@@ -92,7 +103,9 @@ class ZarrDataset(pn.viewable.Viewer):
                 self.crs = ccrs.epsg(crs.to_epsg())
 
     @staticmethod
-    def from_pystac(collection: pystac.Collection, location: XYT | None = None) -> "ZarrDataset":
+    def from_pystac(
+        collection: pystac.Collection, peat_extent: pystac.Collection | None = None, location: XYT | None = None
+    ) -> "ZarrDataset":
         """
         Create a ZarrDataset from a pystac Collection
 
@@ -114,7 +127,7 @@ class ZarrDataset(pn.viewable.Viewer):
             extent = Extent.from_pystac(collection.extent)
             location = XYT(extent=extent)
 
-        wpl_render = collection.extra_fields[WPL_RENDER_KEY]
+        wpl_render = collection.extra_fields[settings.WPL_RENDER_KEY]
 
         xy_asset_key = next(a for a in wpl_render["assets"] if a.endswith(".xy.zarr"))
         ts_asset_key = next(a for a in wpl_render["assets"] if a.endswith(".ts.zarr"))
@@ -131,6 +144,8 @@ class ZarrDataset(pn.viewable.Viewer):
             **ts_asset.ext.xarray.open_kwargs,  # type: ignore
         )
 
+        peat_extent_da = load_peat_extent_from_stac(peat_extent)
+
         return ZarrDataset(
             location=location,
             xy_ds=xy_ds,
@@ -142,6 +157,7 @@ class ZarrDataset(pn.viewable.Viewer):
             colormap_name=wpl_render["colormap_name"],
             colormap_min=wpl_render["colormap_range"][0],
             colormap_max=wpl_render["colormap_range"][1],
+            peat_extent_da=peat_extent_da,
         )
 
     @param.depends("location.date", watch=True, on_init=True)
@@ -211,7 +227,14 @@ class ZarrDataset(pn.viewable.Viewer):
         return df
 
     @param.depends(
-        "date", "location.latitude", "location.longitude", "colormap_name", "colormap_min", "colormap_max", watch=False
+        "date",
+        "location.latitude",
+        "location.longitude",
+        "colormap_name",
+        "colormap_min",
+        "colormap_max",
+        "overlay_peat_extent",
+        watch=False,
     )
     def map_view(self) -> hv.Overlay:
         """
@@ -230,9 +253,20 @@ class ZarrDataset(pn.viewable.Viewer):
 
         point = self.location.point()  # type: ignore
 
-        overlay = gf.ocean * gf.land * bbox * image * point
+        overlay = [gf.ocean, gf.land, bbox, image]
 
-        return overlay
+        if self.peat_extent_da is not None:
+            peat_extent_map = gv.Image(self.peat_extent_da, kdims=["x", "y"], crs=self.crs)
+            peat_extent_map.opts(projection=self.crs)
+            # toggle the alpha (transparency) based on the overlay_peat_extent parameter
+            alpha = settings.PEAT_ALPHA if self.overlay_peat_extent else 0
+            cmap = ListedColormap([settings.PEAT_COLOUR])
+            peat_extent_map.opts(alpha=alpha, cmap=cmap, colorbar=False)
+            overlay.append(peat_extent_map)
+
+        overlay.append(point)
+ 
+        return hv.Overlay(overlay)
 
     @param.depends(
         "date", "location.latitude", "location.longitude", "colormap_name", "colormap_min", "colormap_max", watch=False
@@ -285,7 +319,7 @@ class ZarrDataset(pn.viewable.Viewer):
         # index with [] to preserve the length 1 time dimension
         data_at_date = data_series.loc[[pd.Timestamp(self.date)]]
         current_point = hv.Scatter(data_at_date, kdims=["time"], vdims=[self.primary_var_name])
-        current_point.opts(**POINT_OF_INTEREST_OPTS)
+        current_point.opts(**settings.POINT_OF_INTEREST_OPTS)
         elements.append(current_point)
 
         overlay = hv.Overlay(elements)
@@ -319,9 +353,13 @@ class ZarrDataset(pn.viewable.Viewer):
         return memory_file
 
     def widgets(self) -> pn.Param:
+        params = ["colormap_name", "colormap_max", "colormap_min"]
+        if self.peat_extent_da is not None:
+            params.append("overlay_peat_extent")
+
         return pn.Param(
             self,
-            parameters=["colormap_name", "colormap_max", "colormap_min"],
+            parameters=params,
             show_name=False,
             widgets={"colormap_name": pn.widgets.AutocompleteInput},
         )
@@ -407,3 +445,35 @@ class ZarrDataset(pn.viewable.Viewer):
             ),
             width_policy="max",
         )
+
+
+def load_peat_extent_from_stac(collection: pystac.Collection | None) -> xr.DataArray | None:
+    """
+    Load a peat extent mask from a STAC Collection.
+    Assumes that the STAC collection could be opened by COGDataset.
+    """
+    if collection is None:
+        return None
+
+    n_items = len(collection.get_item_links())
+    if n_items != 1:
+        raise ValueError("expected a single item in the collection")
+
+    item = next(collection.get_items())
+
+    if not item.ext.has("render"):
+        raise ValueError("item does not implement the STAC render extension")
+
+    default_render = item.ext.render.renders["default"]
+
+    if len(default_render.assets) != 1:
+        raise ValueError("expected a single asset in the default render")
+
+    layer_id = default_render.assets[0]
+
+    asset = item.get_assets(media_type=pystac.MediaType.COG)[layer_id]
+
+    da = Layer.from_pystac(asset).da
+
+    # mask non-peat with NaN
+    return da.where(da == 1)

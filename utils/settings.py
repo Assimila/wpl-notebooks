@@ -42,6 +42,12 @@ BIOME_COLOUR: dict[Biome, str] = {"boreal": "mediumturquoise", "temperate": "gol
 # default is 330
 SIDEBAR_WIDTH = 330
 
+PEAT_EXTENT_COLLECTION_ID = "peat-classification"
+
+# styling for peat extent map
+PEAT_COLOUR = "gold"
+PEAT_ALPHA = 0.8
+
 
 # should be an absolute path to the directory containing all site-level peat health indicators
 SITE_LEVEL_PHI_DIR = os.environ.get("SITE_LEVEL_PHI_DIR", None)

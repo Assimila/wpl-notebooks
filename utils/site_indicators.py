@@ -334,12 +334,11 @@ class SiteLevelPHI(pn.viewable.Viewer):
         # mask non-peat with NaN
         peat_extent = self.peat_extent.where(self.peat_extent == 1)
 
-        peat_colour = "gold"
-        cmap = ListedColormap([peat_colour])
+        cmap = ListedColormap([settings.PEAT_COLOUR])
 
         image = gv.Image(peat_extent, kdims=["x", "y"], crs=ccrs.PlateCarree())
         image.opts(projection=ccrs.GOOGLE_MERCATOR)
-        image.opts(alpha=0.6, cmap=cmap)
+        image.opts(alpha=settings.PEAT_ALPHA, cmap=cmap)
 
         overlay = basemap * image
         overlay.opts(projection=ccrs.GOOGLE_MERCATOR)

@@ -2,6 +2,7 @@ import logging
 
 import pystac
 
+from . import settings, utils
 from .cog import COGDataset
 from .settings import WPL_RENDER_KEY
 from .zarr import ZarrDataset
@@ -46,8 +47,18 @@ def map_collection_to_dataset(collection: pystac.Collection) -> ZarrDataset | CO
     has_render_key = WPL_RENDER_KEY in collection.extra_fields
 
     if n_items == 0 and n_zarr >= 2 and has_render_key:
+        # look for a peat extent collection to use as an optional map layer
+        peat_extent_collection: pystac.Collection | None = None
+        site_catalog = collection.get_parent()
+        if site_catalog is not None:
+            collections = utils.get_collections(site_catalog)
+            try:
+                peat_extent_collection = next(c for c in collections if c.id == settings.PEAT_EXTENT_COLLECTION_ID)
+            except StopIteration:
+                pass
+
         try:
-            return ZarrDataset.from_pystac(collection)
+            return ZarrDataset.from_pystac(collection, peat_extent=peat_extent_collection)
         except Exception:
             logger.exception("Failed to create ZarrDataset from collection", collection)
             return None
