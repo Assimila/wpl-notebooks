@@ -13,6 +13,7 @@ import rioxarray  # noqa: F401
 import xarray as xr
 from holoviews import streams
 
+from . import settings
 from .colour_maps import get_colour_maps
 from .utils import attach_stream_to_map
 from .xyt import XY, Extent
@@ -178,9 +179,15 @@ class COGDataset(pn.viewable.Viewer):
 
         point = self.location.point()  # type: ignore
 
-        overlay = gf.ocean * gf.land * bbox * image * point
+        overlay = [
+            gf.ocean(scale=settings.GEOVIEWS_FEATURES_SCALE),
+            gf.land(scale=settings.GEOVIEWS_FEATURES_SCALE),
+            bbox,
+            image,
+            point
+        ]
 
-        return overlay
+        return hv.Overlay(overlay)
 
     def widgets(self) -> pn.Param:
         return pn.Param(
@@ -189,7 +196,7 @@ class COGDataset(pn.viewable.Viewer):
             show_name=False,
             widgets={"colormap_name": pn.widgets.AutocompleteInput},
         )
-    
+
     @param.depends("layer_id", watch=False)
     def download_link(self) -> pn.pane.Markdown:
         href = self.layers[self.layer_id].href
@@ -227,8 +234,6 @@ class COGDataset(pn.viewable.Viewer):
                     height=500,
                 ),
             ),
-            pn.Row(
-                self.download_link
-            ),
+            pn.Row(self.download_link),
             width_policy="max",
         )

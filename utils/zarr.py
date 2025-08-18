@@ -253,7 +253,12 @@ class ZarrDataset(pn.viewable.Viewer):
 
         point = self.location.point()  # type: ignore
 
-        overlay = [gf.ocean, gf.land, bbox, image]
+        overlay = [
+            gf.ocean(scale=settings.GEOVIEWS_FEATURES_SCALE),
+            gf.land(scale=settings.GEOVIEWS_FEATURES_SCALE),
+            bbox,
+            image,
+        ]
 
         if self.peat_extent_da is not None:
             peat_extent_map = gv.Image(self.peat_extent_da, kdims=["x", "y"], crs=self.crs)
@@ -265,7 +270,7 @@ class ZarrDataset(pn.viewable.Viewer):
             overlay.append(peat_extent_map)
 
         overlay.append(point)
- 
+
         return hv.Overlay(overlay)
 
     @param.depends(

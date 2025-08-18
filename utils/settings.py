@@ -11,6 +11,11 @@ POINT_OF_INTEREST_OPTS = {
     "line_width": 2,
 }
 
+# the most common options being '10m', '50m' and '110m'
+# 110m is too coarse, because it puts the Quebec site in the water
+GEOVIEWS_FEATURES_SCALE = "50m"
+
+
 CATALOG_URL = "https://s3.waw3-2.cloudferro.com/swift/v1/wpl-stac/stac/catalog.json"
 
 
