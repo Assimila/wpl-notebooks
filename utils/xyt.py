@@ -15,8 +15,8 @@ from .utils import attach_stream_to_map
 class SpatialExtent(param.Parameterized):
     """A bounding box in decimal degrees"""
 
-    longitude_min: float = param.Number(default=0, bounds=(0, 360), allow_None=False, constant=True)  # type: ignore
-    longitude_max: float = param.Number(default=0, bounds=(0, 360), allow_None=False, constant=True)  # type: ignore
+    longitude_min: float = param.Number(default=0, bounds=(-180, 180), allow_None=False, constant=True)  # type: ignore
+    longitude_max: float = param.Number(default=0, bounds=(-180, 180), allow_None=False, constant=True)  # type: ignore
     latitude_min: float = param.Number(default=0, bounds=(-90, 90), allow_None=False, constant=True)  # type: ignore
     latitude_max: float = param.Number(default=0, bounds=(-90, 90), allow_None=False, constant=True)  # type: ignore
 
