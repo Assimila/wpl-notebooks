@@ -392,6 +392,9 @@ def all_site_level_peat_health_indicators() -> dict[str, dict[str, str]]:
 
     Returns: mapping from site-id -> extent name -> subdirectory.
     """
+    if settings.SITE_LEVEL_PHI_DIR is None:
+        raise ValueError("SITE_LEVEL_PHI_DIR is not set")
+
     if not os.path.isdir(settings.SITE_LEVEL_PHI_DIR):
         raise NotADirectoryError(settings.SITE_LEVEL_PHI_DIR)
 

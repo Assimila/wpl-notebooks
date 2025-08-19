@@ -1,3 +1,4 @@
+import os
 from typing import Literal
 
 # this is a custom field in STAC collection metadata
