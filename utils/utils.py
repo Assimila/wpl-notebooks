@@ -4,6 +4,7 @@ import itertools
 import urllib.parse
 from typing import Callable, Iterator, get_args
 
+import cartopy.crs as ccrs
 import geoviews as gv
 import holoviews as hv
 import panel as pn
@@ -115,8 +116,30 @@ def deepcopy[**P, R](func: Callable[P, R]) -> Callable[P, R]:
     """
     Decorator that returns a deepcopy of the inner function's return value.
     """
+
     @functools.wraps(func)
     def wrapper(*args: P.args, **kwargs: P.kwargs) -> R:
         result = func(*args, **kwargs)
         return copy.deepcopy(result)
+
     return wrapper
+
+
+def fix_crs_extent(crs: ccrs.CRS):
+    """
+    FIX: GeoViews will not render outside of the CRS bounds.
+    Additionally, the cost of imposing this masking is significant (multiple seconds).
+
+    Central Kalimantan sits on the border between UTM 49S and UTM 50S.
+    So we need to extend the bounds of the CRS a little,
+    even though this results in greater spatial distortion.
+    """
+    if crs.to_epsg() == 32749:  # UTM 49S
+        # extend the bounds by 100000m to the east
+        x0, x1, y0, y1 = crs.bounds
+        crs.bounds = (
+            x0,
+            x1 + 100000,
+            y0,
+            y1,
+        )

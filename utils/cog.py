@@ -13,7 +13,7 @@ import rioxarray  # noqa: F401
 import xarray as xr
 from holoviews import streams
 
-from . import settings
+from . import settings, utils
 from .colour_maps import get_colour_maps
 from .utils import attach_stream_to_map
 from .xyt import XY, Extent
@@ -92,17 +92,16 @@ class COGDataset(pn.viewable.Viewer):
 
         if "crs" not in params:
             # try pull the CRS from primary_var_name
-            try:
-                da = self.layers[self.layer_id].da
-                crs: rasterio.crs.CRS | None = da.rio.crs
-                if crs is None:
-                    raise ValueError
-                if not crs.is_epsg_code:
-                    raise NotImplementedError
-                with param.edit_constant(self):
-                    self.crs = ccrs.epsg(crs.to_epsg())
-            except KeyError:
-                pass
+            da = self.layers[self.layer_id].da
+            crs: rasterio.crs.CRS | None = da.rio.crs
+            if crs is None:
+                raise ValueError
+            if not crs.is_epsg_code:
+                raise NotImplementedError
+            with param.edit_constant(self):
+                self.crs = ccrs.epsg(crs.to_epsg())
+
+        utils.fix_crs_extent(self.crs)
 
     @staticmethod
     def from_pystac(collection: pystac.Collection, location: XY | None = None) -> "COGDataset":

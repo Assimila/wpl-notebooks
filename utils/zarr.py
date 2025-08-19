@@ -16,7 +16,7 @@ from holoviews import streams
 from matplotlib.colors import ListedColormap
 from rasterio.io import MemoryFile
 
-from . import settings
+from . import settings, utils
 from .cog import Layer
 from .colour_maps import get_colour_maps
 from .utils import attach_stream_to_map, attach_stream_to_time_series
@@ -101,6 +101,8 @@ class ZarrDataset(pn.viewable.Viewer):
                 raise NotImplementedError
             with param.edit_constant(self):
                 self.crs = ccrs.epsg(crs.to_epsg())
+
+        utils.fix_crs_extent(self.crs)
 
     @staticmethod
     def from_pystac(
