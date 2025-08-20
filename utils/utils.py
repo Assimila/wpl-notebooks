@@ -134,12 +134,12 @@ def fix_crs_extent(crs: ccrs.CRS):
     So we need to extend the bounds of the CRS a little,
     even though this results in greater spatial distortion.
     """
-    if crs.to_epsg() == 32749:  # UTM 49S
-        # extend the bounds by 100000m to the east
+    if crs.to_epsg() == 32750:  # UTM 50S
+        # extend the bounds to the west
         x0, x1, y0, y1 = crs.bounds
         crs.bounds = (
-            x0,
-            x1 + 100000,
+            x0 - 50000,
+            x1,
             y0,
             y1,
         )
