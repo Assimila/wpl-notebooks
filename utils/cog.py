@@ -170,6 +170,10 @@ class COGDataset(pn.viewable.Viewer):
         """
         da = self.layers[self.layer_id].da
 
+        print("loading data...")
+        da.load()
+        print(da)
+
         image = gv.Image(da, kdims=["x", "y"], crs=self.crs)
         image.opts(projection=self.crs)
         image.opts(colorbar=True, cmap=self.colormap_name, clim=(self.colormap_min, self.colormap_max))
@@ -179,11 +183,11 @@ class COGDataset(pn.viewable.Viewer):
         point = self.location.point()  # type: ignore
 
         overlay = [
-            gf.ocean(scale=settings.GEOVIEWS_FEATURES_SCALE),
-            gf.land(scale=settings.GEOVIEWS_FEATURES_SCALE),
-            bbox,
+            # gf.ocean(scale=settings.GEOVIEWS_FEATURES_SCALE),
+            # gf.land(scale=settings.GEOVIEWS_FEATURES_SCALE),
+            # bbox,
             image,
-            point
+            # point
         ]
 
         return hv.Overlay(overlay)
@@ -217,7 +221,10 @@ class COGDataset(pn.viewable.Viewer):
         # 1. on the HoloViews object .opts(responsive=True)
         # 2. on the pn.pane.HoloViews(sizing_mode=...)
 
+        import holoviews.operation.datashader as hd
+
         map = gv.DynamicMap(self.map_view)
+        map = hd.rasterize(element=map, width=512, height=512, aggregator="mode")
         tap = streams.Tap(rename={"x": "longitude", "y": "latitude"})
         tap.add_subscriber(self.location.maybe_update_lon_lat)
         map = attach_stream_to_map(tap, map)
