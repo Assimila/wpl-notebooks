@@ -5,6 +5,7 @@ import pystac
 import rioxarray
 import rasterio
 import xarray as xr
+import dask.array as da
 from glob import glob
 # from osgeo import gdal
 # import geopandas as gpd
@@ -136,13 +137,20 @@ def get_weighted_mean_and_uncertainties(data, variable_metadata, indices):
     for i in range(data[variable_name].shape[0]):
 
         print(f"Processing time step {i+1}/{data[variable_name].shape[0]}...")
+        # TODO
+        # This should not be neecesary but might be an issue with the reprojection
+        indices = indices.assign_coords({'x': data[variable_name].x.values})
+        indices = indices.assign_coords({'y': data[variable_name].y.values})
 
         # Select pixels where classification is 1
-        data_vals = data[variable_name].values[i, indices[:, 0], indices[:, 1]]
+        # data_vals = data[variable_name].values[i, indices[:, 0], indices[:, 1]]
+        data_vals = data[variable_name][i].where(indices[0] == 1)
 
         # TODO: find a better solution for this
         if variable_name == 'water_level':
-            unc_vals = data[uncertainty_name].values[indices[:, 0], indices[:, 1]]
+            # unc_vals = data[uncertainty_name].values[indices[:, 0], indices[:, 1]]
+            unc_vals = data[uncertainty_name].where(indices[0] == 1)
+
             # If variable is water-level transform the 95% confidence interval
             # into the standard error. Since A 95% confidence interval corresponds
             # to approximately 1.96 standard deviations, let's get the standard
@@ -157,7 +165,8 @@ def get_weighted_mean_and_uncertainties(data, variable_metadata, indices):
             unc_vals = np.zeros_like(data_vals)
             unc_vals = xr.where(data_vals, 2.0, np.nan)
         else:
-            unc_vals = data[uncertainty_name].values[i, indices[:, 0], indices[:, 1]]
+            # unc_vals = data[uncertainty_name].values[i, indices[:, 0], indices[:, 1]]
+            unc_vals = data[uncertainty_name][i].where(indices[0] == 1)
 
         # Compute weights
         weights = 1.0 / (unc_vals ** 2)
@@ -165,8 +174,10 @@ def get_weighted_mean_and_uncertainties(data, variable_metadata, indices):
         # Avoid division by zero or nan
         # valid = np.isfinite(data_vals) & np.isfinite(weights) & (weights > 0)
         valid = np.isfinite(data_vals) & np.isfinite(weights) & (weights > 0)
-        data_vals = data_vals[valid]
-        weights = weights[valid]
+        # data_vals = data_vals[valid]
+        data_vals = data_vals.where(valid == True)
+        # weights = weights[valid]
+        weights = weights.where(valid == True)
 
         if weights.size == 0:
             weighted_mean = np.nan
@@ -176,7 +187,12 @@ def get_weighted_mean_and_uncertainties(data, variable_metadata, indices):
             weighted_mean = np.sum(data_vals * weights) / np.sum(weights)
 
             # Calculate uncertainty
-            unique_weights, counts = np.unique(weights, return_counts=True)
+            # unique_weights, counts = np.unique(weights, return_counts=True)
+            unique_weights, counts = da.unique(weights.data, return_counts=True)
+            # Remove the NaN count
+            unique_weights, counts = unique_weights.compute(), counts.compute()
+            unique_weights = unique_weights[:-1]
+            counts = counts[:-1]
 
             # For each unique weight:
             #    Get the number of native pixels
@@ -190,6 +206,9 @@ def get_weighted_mean_and_uncertainties(data, variable_metadata, indices):
             denominator = np.sum(weights) ** 2
 
             uncertainty = numerator / denominator if denominator != 0 else np.nan
+
+            weighted_mean = weighted_mean.compute().item()
+            uncertainty = uncertainty.compute().item()
 
             print(f"Weighted mean: {weighted_mean}, Uncertainty: {uncertainty}")
 
