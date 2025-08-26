@@ -273,8 +273,6 @@ class XYT(XY):
             step=60 * 60,  # 1 hour step
             throttled=True,
         )
-        # fix for https://github.com/holoviz/panel/issues/7997
-        slider.param.value_throttled.constant = False
 
         column.append(slider)
         return column

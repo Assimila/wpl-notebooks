@@ -261,8 +261,6 @@ class SiteLevelPHI(pn.viewable.Viewer):
                 throttled=True,
                 name=variable_id,
             )
-            # fix for https://github.com/holoviz/panel/issues/7997
-            slider.param.value_throttled.constant = False
 
             sliders.append(slider)
         return pn.Column(*sliders)
