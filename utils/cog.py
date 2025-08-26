@@ -173,6 +173,7 @@ class COGDataset(pn.viewable.Viewer):
         image = gv.Image(da, kdims=["x", "y"], crs=self.crs)
         image.opts(projection=self.crs)
         image.opts(colorbar=True, cmap=self.colormap_name, clim=(self.colormap_min, self.colormap_max))
+        image.opts(clabel=utils.cf_units(da))
 
         bbox = self.location.extent.spatial.polygon
 

@@ -9,6 +9,7 @@ import geoviews as gv
 import holoviews as hv
 import panel as pn
 import pystac
+import xarray as xr
 from holoviews import streams
 
 from . import settings
@@ -159,3 +160,16 @@ def fix_crs_extent(crs: ccrs.CRS):
             y0,
             y1,
         )
+
+
+def cf_units(da: xr.DataArray) -> str | None:
+    """
+    Extract CF-compliant units from attributes.
+    """
+    units = None
+    if "units" in da.attrs:
+        units = da.attrs["units"]
+    if units == "1":
+        # "1" implies a fractional quantity with no units
+        units = None
+    return units
