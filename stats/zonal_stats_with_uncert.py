@@ -3,6 +3,7 @@ import os
 import sys
 import pystac
 import rioxarray
+import rasterio
 import xarray as xr
 from glob import glob
 # from osgeo import gdal
@@ -13,7 +14,7 @@ import numpy as np
 
 # Set matplotlib backend
 import matplotlib
-matplotlib.use('Agg')  # Use non-interactive backend for headless environments
+# matplotlib.use('Agg')  # Use non-interactive backend for headless environments
 import matplotlib.pyplot as plt
 
 CATALOG_URL = "https://s3.waw3-2.cloudferro.com/swift/v1/wpl-stac/stac/catalog.json"
@@ -72,18 +73,29 @@ def read_data_and_uncertainty(data_path, uncertainty_path):
 
     return lai, uncertainty
 
-def get_pixel_indices_within_classification(classification_path):
+def get_pixel_indices_within_classification(classification_path, resample=True):
     """
     Returns the indices (y, x) of pixels where the classification
     is labeled as peatland, value is 1.
     """
     # Read the classification raster
     classification = rioxarray.open_rasterio(classification_path)
+    # Resample (if needed)
+    # Calculate new resolution (CRS units are meters)
+    new_resolution = classification.rio.resolution()[0] * 2  # 20m
+
+    # Use 'nearest' for categorical data
+    if resample == True:
+        classification = classification.rio.reproject(
+            classification.rio.crs,
+            resolution=new_resolution,
+            resampling=rasterio.enums.Resampling.nearest)
 
     # Find indices where classification is not nan (i.e., inside the classification)
     indices = np.argwhere(classification.isel(band=0).data==1)
 
-    return indices
+    # return indices
+    return classification
 
 def get_pixel_indices_within_geometry(dataarray, shapefile_path):
     """
@@ -165,14 +177,18 @@ def get_weighted_mean_and_uncertainties(data, variable_metadata, indices):
 
             # Calculate uncertainty
             unique_weights, counts = np.unique(weights, return_counts=True)
-           
-            # Numerator: for each unique weight, spatial_ratio^2 / count occurrences, multiply by weight, sum
-            numerator = np.sum((spatial_ratio**2 / counts) * unique_weights)
 
-            # Denominator: for each unique weight, count occurrences, multiply by weight, sum
-            denominator = np.sum(counts * unique_weights)
-            
-            # Compute the ratio
+            # For each unique weight:
+            #    Get the number of native pixels
+            n_native_pixels = counts / spatial_ratio ** 2
+            #    Get the fully covered native pixels contribution
+            m = n_native_pixels.astype(int) * spatial_ratio ** 2
+            #    Get contribution from partially covered native pixels
+            c = n_native_pixels % 1 * spatial_ratio ** 2
+
+            numerator = np.sum(((m ** 2) + (c ** 2)) * unique_weights)
+            denominator = np.sum(weights) ** 2
+
             uncertainty = numerator / denominator if denominator != 0 else np.nan
 
             print(f"Weighted mean: {weighted_mean}, Uncertainty: {uncertainty}")
@@ -269,9 +285,9 @@ if __name__ == "__main__":
         classification_fname = sys.argv[2]
 
         # Asset name, uncertainty name, variable name, spatial ratio
-        # Spatial ratio is nominal spatial res /  20
+        # Spatial ratio is nominal spatial res /  10
         # since 20m is the spatial res of the stored products
-        variables = [['lai', 'lai_std_dev', 'lai', 25],
+        variables = [['lai', 'lai_std_dev', 'lai', 50],
                      ['fpar', 'fpar_std_dev', 'fpar', 25],
                      ['albedo', 'albedo_std_dev', 'albedo', 25],
                      ['evi', 'evi_std_dev', 'evi', 50],
