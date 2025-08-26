@@ -1,7 +1,9 @@
 import copy
 import functools
 import itertools
+import logging
 import urllib.parse
+from dataclasses import dataclass
 from typing import Callable, Iterator, get_args
 
 import cartopy.crs as ccrs
@@ -13,6 +15,8 @@ import xarray as xr
 from holoviews import streams
 
 from . import settings
+
+logger = logging.getLogger(__name__)
 
 
 def attach_stream_to_map(steam: streams.Stream, dynamic_map: gv.DynamicMap) -> gv.Overlay:
@@ -173,3 +177,63 @@ def cf_units(da: xr.DataArray) -> str | None:
         # "1" implies a fractional quantity with no units
         units = None
     return units
+
+
+def fix_units(da: xr.DataArray):
+    """
+    Fixes the type of the `units` attribute.
+    If this is an integer then HoloViews crashes!?
+    """
+    if "units" in da.attrs and type(da.attrs["units"]) is int:
+        logger.debug("Fixing units attribute type from int to str")
+        da.attrs["units"] = str(da.attrs["units"])
+
+
+@dataclass
+class Layer:
+    da: xr.DataArray
+    href: str
+
+    @staticmethod
+    def from_pystac(asset: pystac.Asset) -> "Layer":
+        """
+        Create a Layer from a STAC asset.
+        """
+        da = xr.open_dataarray(asset.href, engine="rasterio", default_name=asset.title)
+        if da.sizes["band"] != 1:
+            raise ValueError("Expected a single bad")
+        da = da.squeeze("band", drop=True)
+        fix_units(da)
+        return Layer(da=da, href=asset.href)
+
+
+def load_peat_extent_from_stac(collection: pystac.Collection | None) -> xr.DataArray | None:
+    """
+    Load a peat extent mask from a STAC Collection.
+    Assumes that the STAC collection could be opened by COGDataset.
+    """
+    if collection is None:
+        return None
+
+    n_items = len(collection.get_item_links())
+    if n_items != 1:
+        raise ValueError("expected a single item in the collection")
+
+    item = next(collection.get_items())
+
+    if not item.ext.has("render"):
+        raise ValueError("item does not implement the STAC render extension")
+
+    default_render = item.ext.render.renders["default"]
+
+    if len(default_render.assets) != 1:
+        raise ValueError("expected a single asset in the default render")
+
+    layer_id = default_render.assets[0]
+
+    asset = item.get_assets(media_type=pystac.MediaType.COG)[layer_id]
+
+    da = Layer.from_pystac(asset).da
+
+    # mask non-peat with NaN
+    return da.where(da == 1)
