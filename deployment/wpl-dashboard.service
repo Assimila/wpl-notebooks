@@ -11,6 +11,7 @@ Group=eouser
 
 WorkingDirectory=/home/eouser/wpl-notebooks
 Environment=PYTHONPATH=/home/eouser/wpl-notebooks
+Environment=SITE_LEVEL_PHI_DIR=/home/eouser/site-level-phi
 
 # need a shell to expand the app/*.ipynb glob
 ExecStart=/bin/bash -c '/home/eouser/anaconda3/bin/conda run --live-stream -n wpl-notebooks panel serve app/*.ipynb --index sites --port 5006 --allow-websocket-origin=dashboard.worldpeatland.org --num-procs 0 --liveness --mem-log-frequency 600000'

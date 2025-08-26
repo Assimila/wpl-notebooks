@@ -119,6 +119,16 @@ class XY(pn.viewable.Viewer):
     latitude: float = param.Number(default=0.0, bounds=(-90, 90), allow_None=False)  # type: ignore
     longitude: float = param.Number(default=0.0, bounds=(-180, 180), allow_None=False)  # type: ignore
 
+    basemap: gv.WMTS = param.Selector(
+        objects={
+            "OpenStreetMap": gv.tile_sources.OSM,
+            "CartoLight": gv.tile_sources.CartoLight,
+            "EsriImagery": gv.tile_sources.EsriImagery,
+        },
+        default=gv.tile_sources.OSM,
+        allow_None=False,
+    )  # type: ignore
+
     def __init__(self, **params):
         super().__init__(**params)
 
@@ -160,13 +170,13 @@ class XY(pn.viewable.Viewer):
         points.opts(**POINT_OF_INTEREST_OPTS)
         return points
 
-    @param.depends("longitude", "latitude", watch=False)
+    @param.depends("longitude", "latitude", "basemap", watch=False)
     def map(self) -> gv.Overlay:
         """
         GeoViews plot in google web mercator projection with a basemap layer.
         Shows the bounding box of the extent, and the point of interest.
         """
-        basemap = gv.tile_sources.OSM
+        basemap = self.basemap
 
         bbox = self.extent.spatial.polygon
         bbox.opts(xaxis=None, yaxis=None, xlabel="", ylabel="")
@@ -206,6 +216,14 @@ class XY(pn.viewable.Viewer):
                 height=200,
                 # Prevent this plot from linking with maps in other projections(!)
                 linked_axes=False,
+            ),
+        )
+        column.append(
+            pn.Param(
+                self,
+                parameters=["basemap"],
+                show_name=False,
+                expand_button=False,  # don't display the parameters of sub-objects
             ),
         )
         return column
@@ -255,8 +273,6 @@ class XYT(XY):
             step=60 * 60,  # 1 hour step
             throttled=True,
         )
-        # fix for https://github.com/holoviz/panel/issues/7997
-        slider.param.value_throttled.constant = False
 
         column.append(slider)
         return column

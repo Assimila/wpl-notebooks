@@ -46,9 +46,10 @@ def map_collection_to_dataset(collection: pystac.Collection) -> ZarrDataset | CO
     n_zarr = len(collection.get_assets(media_type=pystac.MediaType.ZARR))
     has_render_key = WPL_RENDER_KEY in collection.extra_fields
 
-    if n_items == 0 and n_zarr >= 2 and has_render_key:
-        # look for a peat extent collection to use as an optional map layer
-        peat_extent_collection: pystac.Collection | None = None
+    # look for a peat extent collection to use as an optional map layer
+    # should be a sibling STAC collection in the same catalog
+    peat_extent_collection: pystac.Collection | None = None
+    if collection.id != settings.PEAT_EXTENT_COLLECTION_ID:
         site_catalog = collection.get_parent()
         if site_catalog is not None:
             collections = utils.get_collections(site_catalog)
@@ -57,6 +58,7 @@ def map_collection_to_dataset(collection: pystac.Collection) -> ZarrDataset | CO
             except StopIteration:
                 pass
 
+    if n_items == 0 and n_zarr >= 2 and has_render_key:
         try:
             return ZarrDataset.from_pystac(collection, peat_extent=peat_extent_collection)
         except Exception:
@@ -64,7 +66,7 @@ def map_collection_to_dataset(collection: pystac.Collection) -> ZarrDataset | CO
             return None
     elif n_items == 1 and n_zarr == 0 and not has_render_key:
         try:
-            return COGDataset.from_pystac(collection)
+            return COGDataset.from_pystac(collection, peat_extent=peat_extent_collection)
         except Exception:
             logger.exception("Failed to create COGDataset from collection", collection)
             return None

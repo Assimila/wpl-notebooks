@@ -1,5 +1,4 @@
 import logging
-from dataclasses import dataclass
 
 import cartopy.crs as ccrs
 import geoviews as gv
@@ -12,6 +11,7 @@ import rasterio.crs
 import rioxarray  # noqa: F401
 import xarray as xr
 from holoviews import streams
+from matplotlib.colors import ListedColormap
 
 from . import settings, utils
 from .colour_maps import get_colour_maps
@@ -21,49 +21,24 @@ from .xyt import XY, Extent
 logger = logging.getLogger(__name__)
 
 
-def fix_units(da: xr.DataArray):
-    """
-    Fixes the type of the `units` attribute.
-    If this is an integer then HoloViews crashes!?
-    """
-    if "units" in da.attrs and type(da.attrs["units"]) is int:
-        logger.debug("Fixing units attribute type from int to str")
-        da.attrs["units"] = str(da.attrs["units"])
-
-
-@dataclass
-class Layer:
-    da: xr.DataArray
-    href: str
-
-    @staticmethod
-    def from_pystac(asset: pystac.Asset) -> "Layer":
-        """
-        Create a Layer from a STAC asset.
-        """
-        da = xr.open_dataarray(asset.href, engine="rasterio", default_name=asset.title)
-        if da.sizes["band"] != 1:
-            raise ValueError("Expected a single bad")
-        da = da.squeeze("band", drop=True)
-        fix_units(da)
-        return Layer(da=da, href=asset.href)
-
-
 class COGDataset(pn.viewable.Viewer):
     """
     A panel Viewer for a STAC collection composed of a single item with a small number of assets.
     This item is expected to have the STAC render extension.
     And the assets are expected to be cloud optimized GeoTIFFs (COGs).
 
-    This sort collection does not have a time dimension - the item has `datetime=null`,
+    This sort of collection does not have a time dimension - the item has `datetime=null`,
     but instead has a range of validity from `start_datetime` to `end_datetime`.
 
     `layers` are expected to be single-band DataArrays, with (y, x) dimensions.
+
+    In the map view, there is an option to overlay a peat extent mask,
+    which must be provided in the same CRS.
     """
 
     location: XY = param.ClassSelector(class_=XY, label="Region of interest", allow_None=False, constant=True)  # type: ignore
 
-    layers: dict[str, Layer] = param.Dict(
+    layers: dict[str, utils.Layer] = param.Dict(
         allow_None=False, default=dict(), doc="mapping from some key to Layer", constant=True
     )  # type: ignore
 
@@ -76,6 +51,12 @@ class COGDataset(pn.viewable.Viewer):
     crs: ccrs.CRS = param.ClassSelector(
         class_=ccrs.CRS, default=None, allow_None=False, doc="native coordinate reference system", constant=True
     )  # type: ignore
+
+    peat_extent_da: xr.DataArray | None = param.ClassSelector(
+        class_=xr.DataArray, doc="peat extent map", allow_None=True, constant=True
+    )  # type: ignore
+
+    overlay_peat_extent: bool = param.Boolean(default=False, label="Overlay the WorldPeatland peat extent map")  # type: ignore
 
     def __init__(self, **params):
         super().__init__(**params)
@@ -104,7 +85,9 @@ class COGDataset(pn.viewable.Viewer):
         utils.fix_crs_extent(self.crs)
 
     @staticmethod
-    def from_pystac(collection: pystac.Collection, location: XY | None = None) -> "COGDataset":
+    def from_pystac(
+        collection: pystac.Collection, peat_extent: pystac.Collection | None = None, location: XY | None = None
+    ) -> "COGDataset":
         """
         Create a COGDataset from a STAC collection.
 
@@ -141,7 +124,9 @@ class COGDataset(pn.viewable.Viewer):
 
         assets = item.get_assets(media_type=pystac.MediaType.COG)
 
-        layers = {asset_key: Layer.from_pystac(asset) for asset_key, asset in assets.items()}
+        layers = {asset_key: utils.Layer.from_pystac(asset) for asset_key, asset in assets.items()}
+
+        peat_extent_da = utils.load_peat_extent_from_stac(peat_extent)
 
         return COGDataset(
             location=location,
@@ -150,6 +135,7 @@ class COGDataset(pn.viewable.Viewer):
             colormap_name=colormap_name,
             colormap_max=colormap_max,
             colormap_min=colormap_min,
+            peat_extent_da=peat_extent_da,
         )
 
     @param.depends(
@@ -159,6 +145,7 @@ class COGDataset(pn.viewable.Viewer):
         "colormap_name",
         "colormap_min",
         "colormap_max",
+        "overlay_peat_extent",
         watch=False,
     )
     def map_view(self) -> hv.Overlay:
@@ -173,25 +160,39 @@ class COGDataset(pn.viewable.Viewer):
         image = gv.Image(da, kdims=["x", "y"], crs=self.crs)
         image.opts(projection=self.crs)
         image.opts(colorbar=True, cmap=self.colormap_name, clim=(self.colormap_min, self.colormap_max))
+        image.opts(clabel=utils.cf_units(da))
 
         bbox = self.location.extent.spatial.polygon
-
-        point = self.location.point()  # type: ignore
 
         overlay = [
             gf.ocean(scale=settings.GEOVIEWS_FEATURES_SCALE),
             gf.land(scale=settings.GEOVIEWS_FEATURES_SCALE),
             bbox,
             image,
-            point
         ]
+
+        if self.peat_extent_da is not None:
+            peat_extent_map = gv.Image(self.peat_extent_da, kdims=["x", "y"], crs=self.crs)
+            peat_extent_map.opts(projection=self.crs)
+            # toggle the alpha (transparency) based on the overlay_peat_extent parameter
+            alpha = settings.PEAT_ALPHA if self.overlay_peat_extent else 0
+            cmap = ListedColormap([settings.PEAT_COLOUR])
+            peat_extent_map.opts(alpha=alpha, cmap=cmap, colorbar=False)
+            overlay.append(peat_extent_map)
+
+        point = self.location.point()  # type: ignore
+        overlay.append(point)
 
         return hv.Overlay(overlay)
 
     def widgets(self) -> pn.Param:
+        params = ["layer_id", "colormap_name", "colormap_min", "colormap_max"]
+        if self.peat_extent_da is not None:
+            params.append("overlay_peat_extent")
+
         return pn.Param(
             self,
-            parameters=["layer_id", "colormap_name", "colormap_min", "colormap_max"],
+            parameters=params,
             show_name=False,
             widgets={"colormap_name": pn.widgets.AutocompleteInput},
         )

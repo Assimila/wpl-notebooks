@@ -17,7 +17,6 @@ from matplotlib.colors import ListedColormap
 from rasterio.io import MemoryFile
 
 from . import settings, utils
-from .cog import Layer
 from .colour_maps import get_colour_maps
 from .utils import attach_stream_to_map, attach_stream_to_time_series
 from .xyt import XYT, Extent
@@ -146,7 +145,7 @@ class ZarrDataset(pn.viewable.Viewer):
             **ts_asset.ext.xarray.open_kwargs,  # type: ignore
         )
 
-        peat_extent_da = load_peat_extent_from_stac(peat_extent)
+        peat_extent_da = utils.load_peat_extent_from_stac(peat_extent)
 
         return ZarrDataset(
             location=location,
@@ -250,10 +249,9 @@ class ZarrDataset(pn.viewable.Viewer):
         image = gv.Image(xy_slice, kdims=["x", "y"], crs=self.crs)
         image.opts(projection=self.crs)
         image.opts(colorbar=True, cmap=self.colormap_name, clim=(self.colormap_min, self.colormap_max))
+        image.opts(clabel=utils.cf_units(xy_slice))
 
         bbox = self.location.extent.spatial.polygon
-
-        point = self.location.point()  # type: ignore
 
         overlay = [
             gf.ocean(scale=settings.GEOVIEWS_FEATURES_SCALE),
@@ -271,6 +269,7 @@ class ZarrDataset(pn.viewable.Viewer):
             peat_extent_map.opts(alpha=alpha, cmap=cmap, colorbar=False)
             overlay.append(peat_extent_map)
 
+        point = self.location.point()  # type: ignore
         overlay.append(point)
 
         return hv.Overlay(overlay)
@@ -452,35 +451,3 @@ class ZarrDataset(pn.viewable.Viewer):
             ),
             width_policy="max",
         )
-
-
-def load_peat_extent_from_stac(collection: pystac.Collection | None) -> xr.DataArray | None:
-    """
-    Load a peat extent mask from a STAC Collection.
-    Assumes that the STAC collection could be opened by COGDataset.
-    """
-    if collection is None:
-        return None
-
-    n_items = len(collection.get_item_links())
-    if n_items != 1:
-        raise ValueError("expected a single item in the collection")
-
-    item = next(collection.get_items())
-
-    if not item.ext.has("render"):
-        raise ValueError("item does not implement the STAC render extension")
-
-    default_render = item.ext.render.renders["default"]
-
-    if len(default_render.assets) != 1:
-        raise ValueError("expected a single asset in the default render")
-
-    layer_id = default_render.assets[0]
-
-    asset = item.get_assets(media_type=pystac.MediaType.COG)[layer_id]
-
-    da = Layer.from_pystac(asset).da
-
-    # mask non-peat with NaN
-    return da.where(da == 1)

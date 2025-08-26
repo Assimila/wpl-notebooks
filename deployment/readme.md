@@ -64,6 +64,18 @@ sudo ufw status verbose
 
 You should now be able to access the Nginx default page at `http://dashboard.worldpeatland.org`.
 
+## Clone this repository
+
+to `/home/eouser/wpl-notebooks/`
+
+Make a directory for the site-level peat health indicator data
+
+```bash
+mkdir /home/eouser/site-level-phi
+```
+
+Use environment variable `SITE_LEVEL_PHI_DIR` to point to this directory.
+
 ## Add nginx site configuration
 
 Nginx is configured as a reverse proxy in front of the Panel application.
