@@ -82,7 +82,23 @@ def get_site_catalog(site_id: str) -> pystac.Catalog:
 
 @pn.cache(hash_funcs={pystac.Catalog: catalog_hash})
 def get_collections(catalog: pystac.Catalog) -> list[pystac.Collection]:
-    return list(catalog.get_collections())
+    """
+    Get all collections in a catalog.
+
+    Sorts according to collection title,
+    with a caveat that some collections have a title such as "Albedo - detrended",
+    which should be sorted directly after "Albedo".
+    """
+    SUFFIX = " - detrended"
+    collections = list(catalog.get_collections())
+    def sort_key(c: pystac.Collection):
+        title = c.title
+        if title is None:
+            raise ValueError(f"Collection {c.id} has no title")
+        has_suffix = title.endswith(SUFFIX)
+        base_title = title[:-len(SUFFIX)] if has_suffix else title
+        return (base_title, has_suffix)
+    return sorted(collections, key=sort_key)
 
 
 def get_biome(site: pystac.Catalog) -> settings.Biome | None:
