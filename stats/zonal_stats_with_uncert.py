@@ -15,7 +15,7 @@ import numpy as np
 
 # Set matplotlib backend
 import matplotlib
-# matplotlib.use('Agg')  # Use non-interactive backend for headless environments
+matplotlib.use('Agg')  # Use non-interactive backend for headless environments
 import matplotlib.pyplot as plt
 
 CATALOG_URL = "https://s3.waw3-2.cloudferro.com/swift/v1/wpl-stac/stac/catalog.json"
@@ -143,12 +143,10 @@ def get_weighted_mean_and_uncertainties(data, variable_metadata, indices):
         indices = indices.assign_coords({'y': data[variable_name].y.values})
 
         # Select pixels where classification is 1
-        # data_vals = data[variable_name].values[i, indices[:, 0], indices[:, 1]]
         data_vals = data[variable_name][i].where(indices[0] == 1)
 
         # TODO: find a better solution for this
         if variable_name == 'water_level':
-            # unc_vals = data[uncertainty_name].values[indices[:, 0], indices[:, 1]]
             unc_vals = data[uncertainty_name].where(indices[0] == 1)
 
             # If variable is water-level transform the 95% confidence interval
@@ -162,55 +160,59 @@ def get_weighted_mean_and_uncertainties(data, variable_metadata, indices):
             # data rather than here
             # TODO: Set the uncertainties from INGV info and compute the zonal
             # stats without unique values...
-            unc_vals = np.zeros_like(data_vals)
-            unc_vals = xr.where(data_vals, 2.0, np.nan)
+            unc_vals = xr.where(~np.isnan(data_vals), 2.0, np.nan)
         else:
-            # unc_vals = data[uncertainty_name].values[i, indices[:, 0], indices[:, 1]]
             unc_vals = data[uncertainty_name][i].where(indices[0] == 1)
 
         # Compute weights
         weights = 1.0 / (unc_vals ** 2)
 
         # Avoid division by zero or nan
-        # valid = np.isfinite(data_vals) & np.isfinite(weights) & (weights > 0)
         valid = np.isfinite(data_vals) & np.isfinite(weights) & (weights > 0)
-        # data_vals = data_vals[valid]
         data_vals = data_vals.where(valid == True)
-        # weights = weights[valid]
         weights = weights.where(valid == True)
 
-        if weights.size == 0:
-            weighted_mean = np.nan
-            uncertainty = np.nan
+        # Calculate uncertainty
+        unique_weights, counts = da.unique(weights.data, return_counts=True)
+        unique_weights, counts = unique_weights.compute(), counts.compute()
+
+        # Remove the NaN count
+        not_nan_indices = ~np.isnan(unique_weights)
+        unique_weights = unique_weights[not_nan_indices]
+        counts = counts[not_nan_indices]
+
+        if unique_weights.size == 1:
+            weighted_mean = np.sum(data_vals * weights) / np.sum(weights)
+            weighted_mean = weighted_mean.compute().item()
+
+            uncertainty = (np.sqrt(1.0/unique_weights)) / \
+                           np.sqrt(counts[0] * spatial_ratio)
+            uncertainty = uncertainty.item()
         else:
             # Calculate weighted mean
             weighted_mean = np.sum(data_vals * weights) / np.sum(weights)
 
             # Calculate uncertainty
-            # unique_weights, counts = np.unique(weights, return_counts=True)
-            unique_weights, counts = da.unique(weights.data, return_counts=True)
-            # Remove the NaN count
-            unique_weights, counts = unique_weights.compute(), counts.compute()
-            unique_weights = unique_weights[:-1]
-            counts = counts[:-1]
-
-            # For each unique weight:
             #    Get the number of native pixels
             n_native_pixels = counts / spatial_ratio ** 2
             #    Get the fully covered native pixels contribution
-            m = n_native_pixels.astype(int) * spatial_ratio ** 2
+            ## m = n_native_pixels.astype(int) * spatial_ratio ** 2
+            m = n_native_pixels.astype(int)
             #    Get contribution from partially covered native pixels
             c = n_native_pixels % 1 * spatial_ratio ** 2
 
-            numerator = np.sum(((m ** 2) + (c ** 2)) * unique_weights)
+            ## numerator = np.sum(((m ** 2) + (c ** 2)) * unique_weights)
+            numerator = np.sum(((m * spatial_ratio ** 4) + (c ** 2)) * unique_weights)
             denominator = np.sum(weights) ** 2
 
             uncertainty = numerator / denominator if denominator != 0 else np.nan
 
             weighted_mean = weighted_mean.compute().item()
-            uncertainty = uncertainty.compute().item()
 
-            print(f"Weighted mean: {weighted_mean}, Uncertainty: {uncertainty}")
+            if isinstance(uncertainty, xr.DataArray):
+                uncertainty = uncertainty.compute().item()
+
+        print(f"Weighted mean: {weighted_mean}, Uncertainty: {uncertainty}")
 
         weighted_means.append(weighted_mean)
         uncertainties.append(uncertainty)
@@ -222,7 +224,7 @@ def get_weighted_mean_and_uncertainties(data, variable_metadata, indices):
     
     return df
 
-def create_plot(weighted_mean, weighted_variance, variable):
+def create_plot(weighted_mean, weighted_variance, variable, site_name):
     """
     Create a plot of the zonal stats time series
     """
@@ -255,7 +257,8 @@ def create_plot(weighted_mean, weighted_variance, variable):
     plt.grid()
     plt.tight_layout()
 
-    plt.savefig(f"/tmp/{variable}_weighted_mean_and_uncert.png", dpi=150)
+    plt.savefig(f"/tmp/{variable}_weighted_mean_and_uncert_{site_name}.png",
+                dpi=150)
 
 def extract_zonal_stats(variable_metadata, site,
                         classification_fname, plot=False):
@@ -283,7 +286,7 @@ def extract_zonal_stats(variable_metadata, site,
     uncertainty = weighted_stats['uncertainty'].resample('D').interpolate('linear')
 
     if plot == True:
-        create_plot(weighted_mean, uncertainty, asset_name)
+        create_plot(weighted_mean, uncertainty, asset_name, site)
 
     return weighted_mean, uncertainty
 
@@ -304,17 +307,19 @@ if __name__ == "__main__":
         classification_fname = sys.argv[2]
 
         # Asset name, uncertainty name, variable name, spatial ratio
-        # Spatial ratio is nominal spatial res /  10
+        # Spatial ratio is nominal spatial res of the product /  20
         # since 20m is the spatial res of the stored products
-        variables = [['lai', 'lai_std_dev', 'lai', 50],
+        variables = [['lai', 'lai_std_dev', 'lai', 25],
                      ['fpar', 'fpar_std_dev', 'fpar', 25],
                      ['albedo', 'albedo_std_dev', 'albedo', 25],
                      ['evi', 'evi_std_dev', 'evi', 50],
                      ['lst-day', 'lst_day_std_dev', 'lst_day', 50],
                      ['lst-night', 'lst_night_std_dev', 'lst_night', 50],
                      ['lst-diurnal-range', 'lst_diurnal_range_std_dev', 'lst_diurnal_range', 50],
-                     ['surface-displacement', 'surface_displacement_dev', 'displacement', 1.0],
+                     ['surface-displacement', 'surface_displacement_dev', 'displacement', 0.75],
                      ['water-level', 'confidence_interval', 'water_level', 5]]
+
+        # variables = [['lai', 'lai_std_dev', 'lai', 25]]
 
         data = pd.DataFrame()
         uncertainty = pd.DataFrame()
