@@ -5,6 +5,7 @@ from typing import Annotated
 import cartopy.crs as ccrs
 import geoviews as gv
 import holoviews as hv
+import numpy as np
 import pandas as pd
 import panel as pn
 import param
@@ -115,13 +116,37 @@ class SiteLevelPHI(pn.viewable.Viewer):
     def update_peat_health_indicator(self):
         """
         Calculate the peat health indicator time series based on the variable loadings.
+
+        Updates self.peat_health_indicator.
+
+        A loading of zero means that the variable should be excluded, thereby avoiding any problems with NaNs.
         """
-        total_loading = sum(abs(variable_loading.loading) for variable_loading in self.variable_loadings.values())
+        # tolerance to consider a loading == zero
+        # note SLIDER_STEP = 0.01
+        EPSILON = 0.001
+
+        # filter out variables with zero loading
+        variable_loadings: dict[str, Loading] = {
+            variable_id: variable_loading
+            for variable_id, variable_loading in self.variable_loadings.items()
+            if abs(variable_loading.loading) > EPSILON
+        }
+
+        if len(variable_loadings) == 0:
+            # all variable loadings are zero!
+            index = self.variables[next(iter(self.variables))].data.index
+            series = pd.Series(np.nan, index=index)
+            series.index.name = "time"  # for holoviews kdims
+            self.peat_health_indicator = series
+            return
+
+        total_loading = sum(abs(variable_loading.loading) for variable_loading in variable_loadings.values())
 
         series: pd.Series = sum(
-            variable_loading.loading * self.variables[var_id].z_score / total_loading
-            for var_id, variable_loading in self.variable_loadings.items()
+            variable_loading.loading * self.variables[variable_id].z_score
+            for variable_id, variable_loading in variable_loadings.items()
         )  # type: ignore
+        series = series / total_loading
         series.index.name = "time"  # for holoviews kdims
 
         self.peat_health_indicator = series
@@ -252,16 +277,16 @@ class SiteLevelPHI(pn.viewable.Viewer):
         """
         Sliders to control the loading of each variable
         """
+        SLIDER_STEP = 0.01
         sliders = []
         for variable_id, variable_loading in self.variable_loadings.items():
             slider = pn.widgets.FloatSlider.from_param(
                 variable_loading.param.loading,
-                step=0.01,
+                step=SLIDER_STEP,
                 bar_color=self.variables[variable_id].param.colour.rx(),
                 throttled=True,
                 name=variable_id,
             )
-
             sliders.append(slider)
         return pn.Column(*sliders)
 
