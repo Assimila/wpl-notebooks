@@ -136,7 +136,7 @@ def get_weighted_mean_and_uncertainties(data, variable_metadata, indices):
 
     for i in range(data[variable_name].shape[0]):
 
-        print(f"Processing time step {i+1}/{data[variable_name].shape[0]}...")
+        # print(f"Processing time step {i+1}/{data[variable_name].shape[0]}...")
         # TODO
         # This should not be neecesary but might be an issue with the reprojection
         indices = indices.assign_coords({'x': data[variable_name].x.values})
@@ -196,13 +196,13 @@ def get_weighted_mean_and_uncertainties(data, variable_metadata, indices):
             #    Get the number of native pixels
             n_native_pixels = counts / spatial_ratio ** 2
             #    Get the fully covered native pixels contribution
-            ## m = n_native_pixels.astype(int) * spatial_ratio ** 2
-            m = n_native_pixels.astype(int)
+            m = n_native_pixels.astype(int) * spatial_ratio ** 2
+            # m = n_native_pixels.astype(int)
             #    Get contribution from partially covered native pixels
             c = n_native_pixels % 1 * spatial_ratio ** 2
 
-            ## numerator = np.sum(((m ** 2) + (c ** 2)) * unique_weights)
-            numerator = np.sum(((m * spatial_ratio ** 4) + (c ** 2)) * unique_weights)
+            numerator = np.sum(((m ** 2) + (c ** 2)) * unique_weights)
+            ## numerator = np.sum(((m * spatial_ratio ** 4) + (c ** 2)) * unique_weights)
             denominator = np.sum(weights) ** 2
 
             uncertainty = numerator / denominator if denominator != 0 else np.nan
@@ -212,12 +212,12 @@ def get_weighted_mean_and_uncertainties(data, variable_metadata, indices):
             if isinstance(uncertainty, xr.DataArray):
                 uncertainty = uncertainty.compute().item()
 
-        print(f"Weighted mean: {weighted_mean}, Uncertainty: {uncertainty}")
+        # print(f"Weighted mean: {weighted_mean}, Uncertainty: {uncertainty}")
 
         weighted_means.append(weighted_mean)
         uncertainties.append(uncertainty)
 
-    # Create a DataFrame to stores the weighted means, variances, and uncertainty ratios
+    # Create a DataFrame to stores the weighted means and uncertainties
     df = pd.DataFrame({"weighted_mean": weighted_means,
                        "uncertainty": uncertainties},
                        index=data['time'].values)
@@ -319,7 +319,8 @@ if __name__ == "__main__":
                      ['surface-displacement', 'surface_displacement_dev', 'displacement', 0.75],
                      ['water-level', 'confidence_interval', 'water_level', 5]]
 
-        # variables = [['lai', 'lai_std_dev', 'lai', 25]]
+        # variables = [['lai', 'lai_std_dev', 'lai', 25],
+        #              ['surface-displacement', 'surface_displacement_dev', 'displacement', 0.75]]
 
         data = pd.DataFrame()
         uncertainty = pd.DataFrame()
@@ -328,11 +329,26 @@ if __name__ == "__main__":
             print(f"Processing {variable_metadata[0]}...")
             w_mu, w_unc = extract_zonal_stats(variable_metadata,
                               site, classification_fname, plot=True)
-            print(w_mu, w_unc)
 
             variable_name = variable_metadata[2]
-            data[variable_name] = w_mu
-            uncertainty[variable_name] = w_unc
+
+            if data.columns.shape[0] == 0:
+                data[variable_name] = w_mu
+                uncertainty[variable_name] = w_unc
+            else:
+                # Get the union of all dates
+                all_dates = data.index.union(w_mu.index)
+
+                # Reindex to the full date range
+                data = data.reindex(all_dates)
+                w_mu = w_mu.reindex(all_dates)
+
+                uncertainty = uncertainty.reindex(all_dates)
+                w_unc = w_unc.reindex(all_dates)
+
+                # Add the new column
+                data[variable_name] = w_mu
+                uncertainty[variable_name] = w_unc
 
         filename = f"time_series_{site}.h5"
         data.to_hdf(filename, key="data")

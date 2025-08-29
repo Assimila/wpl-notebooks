@@ -5,11 +5,14 @@
         "water-level": -2.0
     },
     "variable_loadings": {
-	"lai" : 0.5,
-	"fpar" : 0.5,
-	"albedo" : 0.5,
-	"evi" : 0.5,
-	"lst-diurnal-range" : 0.5,
-	"surface-displacement" : 0.5
+	"lai" : 0.28881383,
+	"fpar" : 0.28077515,
+	"albedo" : 0.11957637,
+	"evi" : 0.02096488,
+	"lst_day" : 0.05710814,
+	"lst_night" : 0.10788103,
+	"lst-diurnal-range" : 0.07736422, 
+	"surface-displacement" : 0.01480197,
+	"water-level" : 0.0327144
     }
 }
