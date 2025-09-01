@@ -15,7 +15,7 @@ import numpy as np
 
 # Set matplotlib backend
 import matplotlib
-matplotlib.use('Agg')  # Use non-interactive backend for headless environments
+# matplotlib.use('Agg')  # Use non-interactive backend for headless environments
 import matplotlib.pyplot as plt
 
 CATALOG_URL = "https://s3.waw3-2.cloudferro.com/swift/v1/wpl-stac/stac/catalog.json"
@@ -74,23 +74,18 @@ def read_data_and_uncertainty(data_path, uncertainty_path):
 
     return lai, uncertainty
 
-def get_pixel_indices_within_classification(classification_path, resample=True):
+def get_pixel_indices_within_classification(classification_path, master, resample=True):
     """
     Returns the indices (y, x) of pixels where the classification
     is labeled as peatland, value is 1.
     """
     # Read the classification raster
     classification = rioxarray.open_rasterio(classification_path)
-    # Resample (if needed)
-    # Calculate new resolution (CRS units are meters)
-    new_resolution = classification.rio.resolution()[0] * 2  # 20m
 
-    # Use 'nearest' for categorical data
+    # Resample (if needed), use 'nearest' for categorical data
     if resample == True:
-        classification = classification.rio.reproject(
-            classification.rio.crs,
-            resolution=new_resolution,
-            resampling=rasterio.enums.Resampling.nearest)
+        classification = classification.rio.reproject_match(master,
+                resampling=rasterio.enums.Resampling.nearest)
 
     # Find indices where classification is not nan (i.e., inside the classification)
     indices = np.argwhere(classification.isel(band=0).data==1)
@@ -272,7 +267,8 @@ def extract_zonal_stats(variable_metadata, site,
     data = read_stac_data(variable=asset_name, site=site)
 
     # Get the indices where the classification is 1
-    indices = get_pixel_indices_within_classification(classification_fname)
+    indices = get_pixel_indices_within_classification(classification_fname,
+                                                      master=data)
 
     # Compute stats
     weighted_stats = get_weighted_mean_and_uncertainties(data=data,
@@ -319,8 +315,7 @@ if __name__ == "__main__":
                      ['surface-displacement', 'surface_displacement_dev', 'displacement', 0.75],
                      ['water-level', 'confidence_interval', 'water_level', 5]]
 
-        # variables = [['lai', 'lai_std_dev', 'lai', 25],
-        #              ['surface-displacement', 'surface_displacement_dev', 'displacement', 0.75]]
+        # variables = [['water-level', 'confidence_interval', 'water_level', 5]]
 
         data = pd.DataFrame()
         uncertainty = pd.DataFrame()
