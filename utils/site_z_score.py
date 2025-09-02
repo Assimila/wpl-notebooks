@@ -19,6 +19,7 @@ class ZScore(pn.viewable.Viewer):
     """
 
     name: str = param.String(allow_None=False)  # type: ignore
+    units: str = param.String(allow_None=True, default=None)  # type: ignore
 
     colour: str = param.String(default="#30a2da", allow_None=False)  # type: ignore
 
@@ -85,6 +86,13 @@ class ZScore(pn.viewable.Viewer):
             if pandas_obj.index.name != "time":
                 pandas_obj.index.name = "time"
 
+    @property
+    def y_label(self):
+        if self.units:
+            return f"{self.name} ({self.units})"
+        else:
+            return self.name
+
     @param.depends("colour", watch=False)
     def original_data_view(self):
         """
@@ -118,7 +126,7 @@ class ZScore(pn.viewable.Viewer):
         overlay.opts(
             title=f"{self.name} with error bars at 1 standard deviation",
             xlabel="date",
-            ylabel=self.name,
+            ylabel=self.y_label,
         )
 
         return overlay
@@ -176,7 +184,7 @@ class ZScore(pn.viewable.Viewer):
         overlay.opts(
             title=title,
             xlabel="date",
-            ylabel=self.name,
+            ylabel=self.y_label,
         )
 
         return overlay
@@ -214,7 +222,7 @@ class ZScore(pn.viewable.Viewer):
         overlay.opts(
             title=f"{self.name} z-score",
             xlabel="date",
-            ylabel=f"{self.name}",
+            ylabel=self.name,
         )
 
         return overlay

@@ -27,6 +27,7 @@ class InfoModel(pydantic.BaseModel):
     description: str
     site_id: str
     default_variable_loading_name: str
+    units: dict[str, str]  # mapping from variable name -> units
 
 
 # constrain variable loading l_v to [-1, 1]
@@ -241,6 +242,7 @@ class SiteLevelPHI(pn.viewable.Viewer):
         for variable_id in data_df.columns:
             variables[variable_id] = ZScore(
                 name=variable_id,
+                units=info.units.get(variable_id),
                 colour=next(colours),
                 data=data_df[variable_id],
                 variance=variance_df[variable_id],

@@ -105,7 +105,10 @@ This file contains metadata about the peat health indicator dataset.
     "name": <string>,
     "description": <string>,
     "site_id": <string>,
-    "default_variable_loading_name": <string>
+    "default_variable_loading_name": <string>,
+    "units": {
+        <variable name>: <string>
+    }
 }
 ```
 
@@ -117,6 +120,8 @@ which should map to a STAC sub-catalog id.
 The combination of `site_id` and `name` should be unique.
 
 `default_variable_loading_name` should correspond to the `name` attribute of one of the files in the `variable_loading` directory.
+
+`units` is a required key that specifies optional units for each variable.
 
 ### Peat map (peat_extent.tiff)
 
