@@ -122,7 +122,7 @@ class SiteLevelPHI(pn.viewable.Viewer):
         A loading of zero means that the variable should be excluded, thereby avoiding any problems with NaNs.
         """
         # tolerance to consider a loading == zero
-        # note SLIDER_STEP = 0.01
+        # note SLIDER_STEP = 0.05
         EPSILON = 0.001
 
         # filter out variables with zero loading
@@ -277,7 +277,7 @@ class SiteLevelPHI(pn.viewable.Viewer):
         """
         Sliders to control the loading of each variable
         """
-        SLIDER_STEP = 0.01
+        SLIDER_STEP = 0.05
         sliders = []
         for variable_id, variable_loading in self.variable_loadings.items():
             slider = pn.widgets.FloatSlider.from_param(
