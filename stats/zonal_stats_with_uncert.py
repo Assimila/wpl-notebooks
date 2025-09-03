@@ -1,5 +1,6 @@
 
 import os
+import pathlib
 import sys
 import pystac
 import rioxarray
@@ -15,7 +16,7 @@ import numpy as np
 
 # Set matplotlib backend
 import matplotlib
-# matplotlib.use('Agg')  # Use non-interactive backend for headless environments
+matplotlib.use('Agg')  # Use non-interactive backend for headless environments
 import matplotlib.pyplot as plt
 
 CATALOG_URL = "https://s3.waw3-2.cloudferro.com/swift/v1/wpl-stac/stac/catalog.json"
@@ -131,7 +132,7 @@ def get_weighted_mean_and_uncertainties(data, variable_metadata, indices):
 
     for i in range(data[variable_name].shape[0]):
 
-        # print(f"Processing time step {i+1}/{data[variable_name].shape[0]}...")
+        print(f"Processing time step {i+1}/{data[variable_name].shape[0]}...")
         # TODO
         # This should not be neecesary but might be an issue with the reprojection
         indices = indices.assign_coords({'x': data[variable_name].x.values})
@@ -143,12 +144,7 @@ def get_weighted_mean_and_uncertainties(data, variable_metadata, indices):
         # TODO: find a better solution for this
         if variable_name == 'water_level':
             unc_vals = data[uncertainty_name].where(indices[0] == 1)
-
-            # If variable is water-level transform the 95% confidence interval
-            # into the standard error. Since A 95% confidence interval corresponds
-            # to approximately 1.96 standard deviations, let's get the standard
-            # error dividing by 1.96...
-            unc_vals /= 1.96
+            unc_vals *= 1.96
 
         elif variable_name == 'displacement':
             # TODO: Resampling to daily data should be done when STACking the
@@ -207,19 +203,19 @@ def get_weighted_mean_and_uncertainties(data, variable_metadata, indices):
             if isinstance(uncertainty, xr.DataArray):
                 uncertainty = uncertainty.compute().item()
 
-        # print(f"Weighted mean: {weighted_mean}, Uncertainty: {uncertainty}")
+        print(f"Weighted mean: {weighted_mean}, Uncertainty: {uncertainty}")
 
         weighted_means.append(weighted_mean)
         uncertainties.append(uncertainty)
 
     # Create a DataFrame to stores the weighted means and uncertainties
     df = pd.DataFrame({"weighted_mean": weighted_means,
-                       "uncertainty": uncertainties},
+                       "variance": uncertainties},
                        index=data['time'].values)
     
     return df
 
-def create_plot(weighted_mean, weighted_variance, variable, site_name):
+def create_plot(weighted_mean, weighted_variance, variable, site_name, aoi):
     """
     Create a plot of the zonal stats time series
     """
@@ -252,11 +248,11 @@ def create_plot(weighted_mean, weighted_variance, variable, site_name):
     plt.grid()
     plt.tight_layout()
 
-    plt.savefig(f"/tmp/{variable}_weighted_mean_and_uncert_{site_name}.png",
+    plt.savefig(f"/tmp/{variable}_weighted_mean_and_uncert_{site_name}_{aoi}.png",
                 dpi=150)
 
 def extract_zonal_stats(variable_metadata, site,
-                        classification_fname, plot=False):
+                        classification_fname, aoi, plot=False):
     """
     Extract zonal stats using associated uncertainties
         The stats then will be linearly interpolated to create
@@ -278,13 +274,20 @@ def extract_zonal_stats(variable_metadata, site,
     # Linear interpolation to create synthetic daily dates, normalized first
     # to avoid having hours:minutes in the time dimension
     weighted_stats.index = weighted_stats.index.normalize() 
+
+    annual_mean = weighted_stats['weighted_mean'].resample('YE').mean()
+    annual_mean = annual_mean.resample('D').interpolate('linear')
+
+    annual_uncertainty = weighted_stats['variance'].resample('YE').mean()
+    annual_uncertainty = annual_uncertainty.resample('D').interpolate('linear')
+
     weighted_mean = weighted_stats['weighted_mean'].resample('D').interpolate('linear')
-    uncertainty = weighted_stats['uncertainty'].resample('D').interpolate('linear')
+    uncertainty = weighted_stats['variance'].resample('D').interpolate('linear')
 
     if plot == True:
-        create_plot(weighted_mean, uncertainty, asset_name, site)
+        create_plot(weighted_mean, uncertainty, asset_name, site, aoi)
 
-    return weighted_mean, uncertainty
+    return weighted_mean, uncertainty, annual_mean, annual_uncertainty
 
 
 if __name__ == "__main__":
@@ -315,21 +318,27 @@ if __name__ == "__main__":
                      ['surface-displacement', 'surface_displacement_dev', 'displacement', 0.75],
                      ['water-level', 'confidence_interval', 'water_level', 5]]
 
-        # variables = [['water-level', 'confidence_interval', 'water_level', 5]]
+        variables = [['water-level', 'confidence_interval', 'water_level', 5]]
 
         data = pd.DataFrame()
         uncertainty = pd.DataFrame()
 
+        # Get name of the AOI based on the raster filename
+        aoi = pathlib.Path(os.path.basename(classification_fname)).stem
+
         for variable_metadata in variables:
             print(f"Processing {variable_metadata[0]}...")
-            w_mu, w_unc = extract_zonal_stats(variable_metadata,
-                              site, classification_fname, plot=True)
+            w_mu, w_unc, a_mu, a_unc = extract_zonal_stats(variable_metadata,
+                    site, classification_fname, aoi, plot=True)
 
             variable_name = variable_metadata[2]
 
             if data.columns.shape[0] == 0:
                 data[variable_name] = w_mu
                 uncertainty[variable_name] = w_unc
+                data[f'{variable_name}_annual'] = a_mu
+                uncertainty[f'{variable_name}_annual'] = a_unc
+
             else:
                 # Get the union of all dates
                 all_dates = data.index.union(w_mu.index)
@@ -344,7 +353,10 @@ if __name__ == "__main__":
                 # Add the new column
                 data[variable_name] = w_mu
                 uncertainty[variable_name] = w_unc
+                data[f'{variable_name}_annual'] = a_mu
+                uncertainty[f'{variable_name}_annual'] = a_unc
 
-        filename = f"time_series_{site}.h5"
+        filename = f"time_series_{site}_{aoi}.h5"
         data.to_hdf(filename, key="data")
-        uncertainty.to_hdf(filename, key="uncertainty")
+        uncertainty.to_hdf(filename, key="variance")
+
