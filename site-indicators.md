@@ -171,14 +171,14 @@ The HDF group "variance" should contain a pandas DataFrame with a daily time ser
 - Columns as per the "data" group.
 - Values equate to the variance of the corresponding daily observation.
 
-The HDF group "annual-data" should contain a pandas DataFrame with an annual time series index.
+The HDF group "annual_data" should contain a pandas DataFrame with an annual time series index.
 
 - Columns as per the "data" group.
 - Values are annual means with the same unit as the "data" group, not z-scores.
 
-The HDF group "annual-variance" should contain a pandas DataFrame with an annual time series index.
+The HDF group "annual_variance" should contain a pandas DataFrame with an annual time series index.
 
-- Index as per the "annual-data" group.
+- Index as per the "annual_data" group.
 - Columns as per the "data" group.
 - Values equate to the variance of the corresponding annual mean.
 
