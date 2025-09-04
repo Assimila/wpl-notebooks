@@ -15,7 +15,7 @@ which is spatially representative over an entire peatland site, or sub-region of
    These time series "zonal statistics" provide representative measurements *with variance*.
 2. Resample / interpolate and align all time series onto
    a common **daily** time step,
-   and a common **annual** time step.
+   and a common **annual** time step (one data point per year).
 3. For each dataset, calculate daily and annual climatologies.
 4. Compute dimensionless z-scores (standard anomalies) for each variable,
    relative to its daily and annual climatology.
