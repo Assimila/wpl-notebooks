@@ -130,8 +130,7 @@ def get_weighted_mean_and_uncertainties(data, variable_metadata, indices):
     weighted_means = []
     uncertainties = []
 
-    # for i in range(data[variable_name].shape[0]):
-    for i in range(100):
+    for i in range(data[variable_name].shape[0]):
 
         print(f"Processing time step {i+1}/{data[variable_name].shape[0]}...")
         # TODO
@@ -217,7 +216,7 @@ def get_weighted_mean_and_uncertainties(data, variable_metadata, indices):
     # Create a DataFrame to stores the weighted means and uncertainties
     df = pd.DataFrame({"weighted_mean": weighted_means,
                        "variance": uncertainties},
-                       index=data['time'].values[0:100])
+                       index=data['time'].values)
     
     return df
 
