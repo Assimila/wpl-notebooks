@@ -130,7 +130,8 @@ def get_weighted_mean_and_uncertainties(data, variable_metadata, indices):
     weighted_means = []
     uncertainties = []
 
-    for i in range(data[variable_name].shape[0]):
+    # for i in range(data[variable_name].shape[0]):
+    for i in range(100):
 
         print(f"Processing time step {i+1}/{data[variable_name].shape[0]}...")
         # TODO
@@ -152,6 +153,11 @@ def get_weighted_mean_and_uncertainties(data, variable_metadata, indices):
             # TODO: Set the uncertainties from INGV info and compute the zonal
             # stats without unique values...
             unc_vals = xr.where(~np.isnan(data_vals), 2.0, np.nan)
+
+        elif 'cross_ratio' in variable_name:
+            # For Sentinel-1 CPR, ≈30% (3-σ) relative uncertainty for the
+            # VH/VV cross-pol ratio is a reasonable assumption
+            unc_vals = xr.where(~np.isnan(data_vals), data_vals*0.3, np.nan)
         else:
             unc_vals = data[uncertainty_name][i].where(indices[0] == 1)
 
@@ -211,7 +217,7 @@ def get_weighted_mean_and_uncertainties(data, variable_metadata, indices):
     # Create a DataFrame to stores the weighted means and uncertainties
     df = pd.DataFrame({"weighted_mean": weighted_means,
                        "variance": uncertainties},
-                       index=data['time'].values)
+                       index=data['time'].values[0:100])
     
     return df
 
@@ -275,6 +281,7 @@ def extract_zonal_stats(variable_metadata, site,
     # to avoid having hours:minutes in the time dimension
     weighted_stats.index = weighted_stats.index.normalize() 
 
+    # TODO compute annual weighted mean and error propagation. 
     annual_mean = weighted_stats['weighted_mean'].resample('YE').mean()
     annual_mean = annual_mean.resample('D').interpolate('linear')
 
@@ -292,14 +299,16 @@ def extract_zonal_stats(variable_metadata, site,
 
 if __name__ == "__main__":
 
-    if len(sys.argv) != 3:
+    if len(sys.argv) != 4:
 
         # Check inputs
         print((f"Usage: python .zonal_stats_with_uncert.py"
-               f"<site_root_data_dir> <peatland_extent_path>"))
+               f"<site_root_data_dir> <peatland_extent_path> <ascending|descending>"))
     else:
         # Site name e.g. degero
         site = sys.argv[1]
+        # ascending or descending or empty
+        cross_ratio = sys.argv[3]
 
         # Full path of the peatland classification GeoTiff
         # e.g. /wp_data/sites/Degero/WhatSARPeat/WhatSARPeat2024_Degero.tif
@@ -318,10 +327,17 @@ if __name__ == "__main__":
                      ['surface-displacement', 'surface_displacement_dev', 'displacement', 0.75],
                      ['water-level', 'confidence_interval', 'water_level', 5]]
 
-        variables = [['water-level', 'confidence_interval', 'water_level', 5]]
+        if len(cross_ratio) > 0:
+            cr = [f'cross-ratio-{cross_ratio}',
+                  f'cross-ratio-{cross_ratio}_std_dev',
+                  f'cross_ratio_{cross_ratio}', 1.0 ]
+            variables.append(cr)
 
-        data = pd.DataFrame()
-        uncertainty = pd.DataFrame()
+        daily_data = pd.DataFrame()
+        daily_uncertainty = pd.DataFrame()
+
+        annual_data = pd.DataFrame()
+        annual_uncertainty = pd.DataFrame()
 
         # Get name of the AOI based on the raster filename
         aoi = pathlib.Path(os.path.basename(classification_fname)).stem
@@ -333,30 +349,40 @@ if __name__ == "__main__":
 
             variable_name = variable_metadata[2]
 
-            if data.columns.shape[0] == 0:
-                data[variable_name] = w_mu
-                uncertainty[variable_name] = w_unc
-                data[f'{variable_name}_annual'] = a_mu
-                uncertainty[f'{variable_name}_annual'] = a_unc
+            if daily_data.columns.shape[0] == 0:
+                daily_data[variable_name] = w_mu
+                daily_uncertainty[variable_name] = w_unc
+
+                annual_data[variable_name] = a_mu
+                annual_uncertainty[variable_name] = a_unc
 
             else:
                 # Get the union of all dates
-                all_dates = data.index.union(w_mu.index)
+                all_dates = daily_data.index.union(w_mu.index)
 
                 # Reindex to the full date range
-                data = data.reindex(all_dates)
+                daily_data = daily_data.reindex(all_dates)
                 w_mu = w_mu.reindex(all_dates)
 
-                uncertainty = uncertainty.reindex(all_dates)
+                daily_uncertainty = daily_uncertainty.reindex(all_dates)
                 w_unc = w_unc.reindex(all_dates)
 
-                # Add the new column
-                data[variable_name] = w_mu
-                uncertainty[variable_name] = w_unc
-                data[f'{variable_name}_annual'] = a_mu
-                uncertainty[f'{variable_name}_annual'] = a_unc
+                annual_data = annual_data.reindex(all_dates)
+                a_mu = a_mu.reindex(all_dates)
+
+                annual_uncertainty = annual_uncertainty.reindex(all_dates)
+                a_unc = a_unc.reindex(all_dates)
+
+                daily_data[variable_name] = w_mu
+                daily_uncertainty[variable_name] = w_unc
+
+                annual_data[variable_name] = a_mu
+                annual_uncertainty[variable_name] = a_unc
 
         filename = f"time_series_{site}_{aoi}.h5"
-        data.to_hdf(filename, key="data")
-        uncertainty.to_hdf(filename, key="variance")
+        daily_data.to_hdf(filename, key="data")
+        annual_data.to_hdf(filename, key="annual_data")
+
+        daily_uncertainty.to_hdf(filename, key="variance")
+        annual_uncertainty.to_hdf(filename, key="annual_variance")
 
