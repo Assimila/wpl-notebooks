@@ -282,10 +282,7 @@ def extract_zonal_stats(variable_metadata, site,
 
     # TODO compute annual weighted mean and error propagation. 
     annual_mean = weighted_stats['weighted_mean'].resample('YE').mean()
-    annual_mean = annual_mean.resample('D').interpolate('linear')
-
     annual_uncertainty = weighted_stats['variance'].resample('YE').mean()
-    annual_uncertainty = annual_uncertainty.resample('D').interpolate('linear')
 
     weighted_mean = weighted_stats['weighted_mean'].resample('D').interpolate('linear')
     uncertainty = weighted_stats['variance'].resample('D').interpolate('linear')
@@ -356,22 +353,26 @@ if __name__ == "__main__":
                 annual_uncertainty[variable_name] = a_unc
 
             else:
-                # Get the union of all dates
-                all_dates = daily_data.index.union(w_mu.index)
+                # Get the union of all daily_dates
+                all_daily_dates = daily_data.index.union(w_mu.index)
 
                 # Reindex to the full date range
-                daily_data = daily_data.reindex(all_dates)
-                w_mu = w_mu.reindex(all_dates)
+                daily_data = daily_data.reindex(all_daily_dates)
+                w_mu = w_mu.reindex(all_daily_dates)
 
-                daily_uncertainty = daily_uncertainty.reindex(all_dates)
-                w_unc = w_unc.reindex(all_dates)
+                daily_uncertainty = daily_uncertainty.reindex(all_daily_dates)
+                w_unc = w_unc.reindex(all_daily_dates)
 
-                annual_data = annual_data.reindex(all_dates)
-                a_mu = a_mu.reindex(all_dates)
+                # Get the union of all annual_dates
+                all_annual_dates = annual_data.index.union(a_mu.index)
 
-                annual_uncertainty = annual_uncertainty.reindex(all_dates)
-                a_unc = a_unc.reindex(all_dates)
+                annual_data = annual_data.reindex(all_annual_dates)
+                a_mu = a_mu.reindex(all_annual_dates)
 
+                annual_uncertainty = annual_uncertainty.reindex(all_annual_dates)
+                a_unc = a_unc.reindex(all_annual_dates)
+
+                # Store the variables in the DataFrames
                 daily_data[variable_name] = w_mu
                 daily_uncertainty[variable_name] = w_unc
 
