@@ -10,7 +10,7 @@ import pydantic
 import rioxarray  # noqa: F401
 import xarray as xr
 
-from .. import settings, utils
+from .. import settings
 
 
 class ImmutableModel(pydantic.BaseModel):
