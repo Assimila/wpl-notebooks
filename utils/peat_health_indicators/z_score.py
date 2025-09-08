@@ -1,19 +1,20 @@
+import abc
+import typing
+
 import holoviews as hv
 import pandas as pd
 import panel as pn
 import param
 
-from . import climatology
+from . import annual_climatology, daily_climatology
 
 
-class ZScore(pn.viewable.Viewer):
+class BaseVariable(pn.viewable.Viewer):
     """
     Container for a site-level (aggregated) time series variable.
 
     Transforms the time series to abs(data - optimal_value) if `transform` is True.
     This is useful if the variable is not monotonically correlated with peat health.
-
-    Calculates 365-day climatology, and standard anomaly (z-score) of the time series.
 
     All pandas Series and DataFrames should share a common DatetimeIndex.
     """
@@ -24,53 +25,41 @@ class ZScore(pn.viewable.Viewer):
     colour: str = param.String(default="#30a2da", allow_None=False)  # type: ignore
 
     data: pd.Series = param.Series(allow_None=False, constant=True, doc="Time series")  # type: ignore
-    variance: pd.Series = param.Series(
-        allow_None=False, constant=True, doc="Variance of the time series"
-    )  # type: ignore
+    variance: pd.Series = param.Series(allow_None=False, constant=True, doc="Variance of the time series")  # type: ignore
 
     optimal_value: float = param.Number()  # type: ignore
     transform: bool = param.Boolean(
         allow_None=False, default=False, label="Apply transformation relative to optimal value"
     )  # type: ignore
-    
-    time_series: pd.Series = param.Series(
-        allow_None=False, constant=True, doc="Time series, transformed if requested"
-    )  # type: ignore
+
+    time_series: pd.Series = param.Series(allow_None=False, constant=True, doc="Time series, transformed if requested")  # type: ignore
     climatology_bounds: pd.DataFrame = param.DataFrame(allow_None=False, constant=True)  # type: ignore
-    z_score: pd.Series = param.Series(
-        allow_None=False, constant=True, doc="Standard anomaly of the time series"
-    )  # type: ignore
+    z_score: pd.Series = param.Series(allow_None=False, constant=True, doc="Standard anomaly of the time series")  # type: ignore
 
     @param.depends("transform", "optimal_value", watch=True, on_init=True)
     def transform_time_series(self):
         """
+        Computes and sets time_series, climatology_bounds, and z_score.
         If `transform` is True, calculate the absolute difference from `optimal_value`.
         """
-        if self.transform:
-            time_series = (self.data - self.optimal_value).abs()
-        else:
-            time_series = self.data
+        # override this method to provide implementation
+        self._transform_time_series()
 
-        # 365-day climatology
-        climatology_365 = climatology.daily_climatology(time_series, self.variance)
-        climatology_bounds = climatology.get_climatology_bounds(time_series.index, climatology_365)  # type: ignore
-        z_score = climatology.standard_anomaly(time_series, climatology_365)
-
-        with param.edit_constant(self):
-            # single transaction update
-            self.param.update(
-                time_series=time_series,
-                climatology_bounds=climatology_bounds,
-                z_score=z_score,
-            )
+    @abc.abstractmethod
+    def _transform_time_series(self):
+        """
+        Computes and sets time_series, climatology_bounds, and z_score.
+        If `transform` is True, calculate the absolute difference from `optimal_value`.
+        """
+        raise NotImplementedError
 
     def widgets(self) -> pn.Param:
         return pn.Param(
             self,
-            parameters=["colour", "optimal_value", "transform"],
+            parameters=["optimal_value", "transform"],
             show_name=False,
             widgets={
-                "colour": pn.widgets.ColorPicker,
+                # "colour": pn.widgets.ColorPicker,
                 # "optimal_value": {"visible": self.param.transform.rx()},
             },
         )
@@ -286,3 +275,63 @@ class ZScore(pn.viewable.Viewer):
             ),
             width_policy="max",
         )
+
+
+class DailyVariable(BaseVariable):
+    """
+    Variable on a daily time series.
+    """
+
+    @typing.override
+    def _transform_time_series(self):
+        """
+        Computes and sets time_series, climatology_bounds, and z_score.
+        If `transform` is True, calculate the absolute difference from `optimal_value`.
+        """
+        if self.transform:
+            time_series = (self.data - self.optimal_value).abs()
+        else:
+            time_series = self.data
+
+        # 365-day climatology
+        climatology_365 = daily_climatology.get_climatology(time_series, self.variance)
+        climatology_bounds = daily_climatology.get_climatology_bounds(time_series.index, climatology_365)  # type: ignore
+        z_score = daily_climatology.get_standard_anomaly(time_series, climatology_365)
+
+        with param.edit_constant(self):
+            # single transaction update
+            self.param.update(
+                time_series=time_series,
+                climatology_bounds=climatology_bounds,
+                z_score=z_score,
+            )
+
+
+class AnnualVariable(BaseVariable):
+    """
+    Variable on an annual time series.
+    """
+
+    @typing.override
+    def _transform_time_series(self):
+        """
+        Computes and sets time_series, climatology_bounds, and z_score.
+        If `transform` is True, calculate the absolute difference from `optimal_value`.
+        """
+        if self.transform:
+            time_series = (self.data - self.optimal_value).abs()
+        else:
+            time_series = self.data
+
+        # annual climatology
+        climatology_annual = annual_climatology.get_climatology(time_series, self.variance)
+        climatology_bounds = annual_climatology.get_climatology_bounds(time_series.index, climatology_annual)  # type: ignore
+        z_score = annual_climatology.get_standard_anomaly(time_series, climatology_annual)
+
+        with param.edit_constant(self):
+            # single transaction update
+            self.param.update(
+                time_series=time_series,
+                climatology_bounds=climatology_bounds,
+                z_score=z_score,
+            )

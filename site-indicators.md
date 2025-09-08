@@ -1,7 +1,7 @@
 # Site-level peat health indicator
 
 The WorldPeatland project defines the concept of a site-level peat health indicator,
-which is spatially representative over an entire peatland site.
+which is spatially representative over an entire peatland site, or sub-region of interest.
 
 ## Inputs
 
@@ -13,10 +13,14 @@ which is spatially representative over an entire peatland site.
 
 1. Using the peat extent map as a mask, extract time series from each spatio-temporal dataset.
    These time series "zonal statistics" provide representative measurements *with variance*.
-2. Resample / linearly interpolate and align all time series onto a common daily time step.
-3. For each dataset, calculate daily climatologies.
-4. Compute dimensionless z-scores (standard anomalies) for each variable, relative to its climatology.
-5. Combine the z-scores according to the variable loadings to produce the final peat health indicator.
+2. Resample / interpolate and align all time series onto
+   a common **daily** time step,
+   and a common **annual** time step (one data point per year).
+3. For each dataset, calculate daily and annual climatologies.
+4. Compute dimensionless z-scores (standard anomalies) for each variable,
+   relative to its daily and annual climatology.
+5. Combine the z-scores according to the variable loadings to produce
+   daily and annual peat health indicators.
 
 ### Water level
 
@@ -32,8 +36,10 @@ and use this in the peat health indicator.
 
 ### Climatology and z-scores
 
+#### Daily climatology
+
 Firstly compute the *inverse-variance weighted* mean $\mu_{\mathrm{ord}}$
-and standard deviations $\sigma_{\mathrm{ord}}$
+and standard deviation $\sigma_{\mathrm{ord}}$
 across the multi-year timeseries,
 according to ordinal day-of-year.
 
@@ -46,12 +52,27 @@ z_t = \frac{x_t - \mu_{\mathrm{ord}(t)}}{ \sigma_{\mathrm{ord}(t)} }
 This results in a z-score, or standard anomaly, that indicates how many standard deviations the observation is
 from the climatological mean.
 
-#### Leap years
+##### Leap years
 
 To handle leap years, we drop 29 February from the time series,
 and compute 365 daily climatologies.
 
 When calculating the z-scores, we apply the 28 February climatology to 29 February.
+
+#### Annual climatology
+
+Firstly compute the *inverse-variance weighted* mean $\mu_{\mathrm{ann}}$
+and standard deviation $\sigma_{\mathrm{ann}}$
+across the multi-year timeseries.
+
+For an observation $x_t$ the z-score is defined by:
+
+```math
+z_t = \frac{x_t - \mu_{\mathrm{ann}}}{ \sigma_{\mathrm{ann}} }
+```
+
+This results in a z-score, or standard anomaly, that indicates how many standard deviations the observation is
+from the climatological mean.
 
 ### Variable loadings
 
@@ -73,6 +94,7 @@ For the WorldPeatland dashboard, we want to present various "flavours" of the pe
 
 1. different values of optimal water level $w^*$. 
 2. different variable loadings.
+3. daily vs annual data.
 
 We also want to allow users to tweak these parameters according the their own preference,
 and to see the effect of these changes on the peat health indicator in real-time.
@@ -135,15 +157,30 @@ where pixels with a value of 1 indicate peat and 0 indicate non-peat.
 ### Time series data
 
 Pre-computed time series data for each spatio-temporal dataset.
-Should have a daily temporal resolution, and cover multiple years - sufficient to compute climatologies.
+Should contain both daily and annual time series data covering multiple years - sufficient to compute climatologies.
 Serialised to HDF5 using pandas [to_hdf](https://pandas.pydata.org/docs/reference/api/pandas.DataFrame.to_hdf.html).
 
-The HDF group "data" should contain a pandas DataFrame with a daily time series index. 
-Each column corresponds to a variable.
-Values are observations in whatever unit is most appropriate, not z-scores.
+The HDF group "data" should contain a pandas DataFrame with a daily time series index.
 
-The HDF group "variance" should contain a pandas DataFrame with an identical time series index and columns to the "data" group.
-Values equate to the variance of the corresponding observation.
+- Each column corresponds to a variable.
+- Values are daily observations in whatever unit is most appropriate, not z-scores.
+
+The HDF group "variance" should contain a pandas DataFrame with a daily time series index.
+
+- Index as per the "data" group.
+- Columns as per the "data" group.
+- Values equate to the variance of the corresponding daily observation.
+
+The HDF group "annual_data" should contain a pandas DataFrame with an annual time series index.
+
+- Columns as per the "data" group.
+- Values are annual means with the same unit as the "data" group, not z-scores.
+
+The HDF group "annual_variance" should contain a pandas DataFrame with an annual time series index.
+
+- Index as per the "annual_data" group.
+- Columns as per the "data" group.
+- Values equate to the variance of the corresponding annual mean.
 
 ### Variable loadings
 

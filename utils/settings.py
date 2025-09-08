@@ -33,7 +33,8 @@ ROUTES: dict[RouteName, RouteInfo] = {
     "collections": ("/collections", ["site-id"]),
     "data": ("/data", ["site-id", "collection-id"]),
     "indicators": ("/indicators", ["site-id"]),
-    "site-indicator": ("/site-indicator", ["site-id", "indicator-id"]),
+    "daily-phi": ("/daily-phi", ["site-id", "indicator-id"]),
+    "annual-phi": ("/annual-phi", ["site-id", "indicator-id"]),
 }
 
 # additional metadata key for STAC collection
