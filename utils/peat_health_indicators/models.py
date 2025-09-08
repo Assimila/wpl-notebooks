@@ -1,4 +1,5 @@
 import functools
+import logging
 import os
 import pathlib
 from collections import defaultdict
@@ -9,8 +10,11 @@ import panel as pn
 import pydantic
 import rioxarray  # noqa: F401
 import xarray as xr
+from rasterio.errors import RasterioIOError
 
 from .. import settings
+
+logger = logging.getLogger(__name__)
 
 
 class ImmutableModel(pydantic.BaseModel):
@@ -79,14 +83,44 @@ class SiteLevelPHI(ImmutableModel):
     # not cached because it may be large
     @property
     def peat_extent(self) -> xr.DataArray:
-        da = xr.open_dataarray(
+        """
+        Try to load a sensible overview from the cloud optimized GeoTIFF
+        """
+        # don't try to render a array with a dimension > MAX_PIX
+        MAX_PIX = 2048
+
+        # first open the raw (high res) data
+        overview_level = 0
+        da = rioxarray.open_rasterio(
             self.peat_extent_file,
-            engine="rasterio",
-            default_name="peat_extent",
+            overview_level=overview_level,
         )
+        if not isinstance(da, xr.DataArray):
+            raise ValueError("expected a DataArray")
         da = da.squeeze("band", drop=True)
         if da.rio.crs.to_epsg() != 4326:
             raise ValueError(f"peat_extent_file must have EPSG:4326 CRS, got {da.rio.crs}")
+        nx = da.sizes["x"]
+        ny = da.sizes["y"]
+
+        # if too large, try higher overview levels
+        while nx > MAX_PIX or ny > MAX_PIX:
+            overview_level += 1
+            try:
+                da = rioxarray.open_rasterio(
+                    self.peat_extent_file,
+                    overview_level=overview_level,
+                )
+            except RasterioIOError:
+                # overview level does not exist
+                logger.warning(f"Could not find overview level {overview_level} in {self.peat_extent_file}")
+                break
+            if not isinstance(da, xr.DataArray):
+                raise ValueError("expected a DataArray")
+            da = da.squeeze("band", drop=True)
+            nx = da.sizes["x"]
+            ny = da.sizes["y"]
+        
         return da
 
     @functools.cached_property
