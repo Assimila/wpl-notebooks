@@ -46,7 +46,7 @@ def std(group: pd.DataFrame) -> float:
     return group["ts"].std()
 
 
-def daily_climatology(ts: pd.Series, variance: pd.Series) -> pd.DataFrame:
+def get_climatology(ts: pd.Series, variance: pd.Series) -> pd.DataFrame:
     """
     Calculate the daily climatology of a time series.
 
@@ -77,7 +77,7 @@ def daily_climatology(ts: pd.Series, variance: pd.Series) -> pd.DataFrame:
     return pd.DataFrame({"mean": mean, "std": _std})
 
 
-def standard_anomaly(ts: pd.Series, climatology: pd.DataFrame) -> pd.Series:
+def get_standard_anomaly(ts: pd.Series, climatology: pd.DataFrame) -> pd.Series:
     """
     Calculate the standard anomaly of a time series.
 

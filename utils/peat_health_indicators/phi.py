@@ -1,6 +1,5 @@
-import os
-from collections import defaultdict
-from typing import Annotated
+import abc
+import typing
 
 import cartopy.crs as ccrs
 import geoviews as gv
@@ -9,58 +8,22 @@ import numpy as np
 import pandas as pd
 import panel as pn
 import param
-import pydantic
-import rioxarray  # noqa: F401
 import xarray as xr
 from matplotlib.colors import ListedColormap
 
-from . import settings, utils
-from .site_z_score import ZScore
-
-
-class InfoModel(pydantic.BaseModel):
-    """
-    Encapsulates the info.json file for a site-level peat health indicator.
-    """
-
-    name: str
-    description: str
-    site_id: str
-    default_variable_loading_name: str
-    units: dict[str, str]  # mapping from variable name -> units
-
-
-# constrain variable loading l_v to [-1, 1]
-type loading = Annotated[float, pydantic.Field(ge=-1.0, le=1.0)]
-
-
-class PredefinedVariableLoading(pydantic.BaseModel):
-    """
-    Encapsulates a single variable loading configuration.
-    for a site-level peat health indicator.
-
-    The presence of a key in `optimal_values` indicates that the variable should be transformed
-    to the absolute deviation from the specified value.
-    """
-
-    name: str
-    description: str
-    optimal_values: dict[str, float]
-    variable_loadings: dict[str, loading]
+from .. import settings, utils
+from . import models, z_score
 
 
 class Loading(param.Parameterized):
     loading: float = param.Number(default=0.0, allow_None=False, bounds=(-1.0, 1.0))  # type: ignore
 
 
-class SiteLevelPHI(pn.viewable.Viewer):
+class BasePHI(pn.viewable.Viewer):
     """
     Container for site-level (aggregated) peat health indicators.
 
     See `site-indicators.md` for more information about the data that drives this visualization.
-
-    Instances of the class may be a few MB in size,
-    depending on the number of variables and the length of the time series.
     """
 
     # info.json
@@ -72,10 +35,10 @@ class SiteLevelPHI(pn.viewable.Viewer):
         class_=xr.DataArray, label="Peat extent pixel mask", allow_None=False, constant=True
     )  # type: ignore
 
-    variables: dict[str, ZScore] = param.Dict(
+    variables: dict[str, z_score.BaseVariable] = param.Dict(
         allow_None=False,
         constant=True,
-        doc="Mapping from variable-id to ZScore instance",
+        doc="Mapping from variable-id to Variable instance",
     )  # type: ignore
 
     variable_loadings: dict[str, Loading] = param.Dict(
@@ -85,7 +48,7 @@ class SiteLevelPHI(pn.viewable.Viewer):
         doc="Mapping from variable-id to loading",
     )  # type: ignore
 
-    predefined_variable_loadings: dict[str, PredefinedVariableLoading] = param.Dict(
+    predefined_variable_loadings: dict[str, models.PredefinedVariableLoading] = param.Dict(
         allow_None=False,
         constant=True,
         doc="Mapping from name to PredefinedVariableLoading instance",
@@ -199,81 +162,9 @@ class SiteLevelPHI(pn.viewable.Viewer):
                 self.variable_loadings[variable_id].loading = 0.0
 
     @classmethod
-    def from_directory(cls, directory: str) -> "SiteLevelPHI":
-        """
-        Create a SiteLevelPHI instance from a directory containing the required files.
-
-        ```bash
-        $ tree .
-        .
-        ├── info.json
-        ├── peat_extent.tiff
-        ├── time_series.h5
-        └── variable_loading
-            ├── expert.json
-            ├── svd.json
-            └── ...
-        ```
-        """
-        if not os.path.isdir(directory):
-            raise NotADirectoryError(directory)
-
-        info_file = os.path.join(directory, "info.json")
-        with open(info_file) as f:
-            info = InfoModel.model_validate_json(f.read())
-
-        extent_file = os.path.join(directory, "peat_extent.tiff")
-        da = xr.open_dataarray(
-            extent_file,
-            engine="rasterio",
-            default_name="peat_extent",
-        )
-        da = da.squeeze("band", drop=True)
-        # check crs is EPSG:4326
-        if da.rio.crs.to_epsg() != 4326:
-            raise ValueError(f"Expected EPSG:4326 CRS for peat extent, got {da.rio.crs}")
-
-        timeseries_file = os.path.join(directory, "time_series.h5")
-        data_df = pd.read_hdf(timeseries_file, key="data")
-        variance_df = pd.read_hdf(timeseries_file, key="variance")
-
-        variables = {}
-        colours = utils.colours()
-        for variable_id in data_df.columns:
-            variables[variable_id] = ZScore(
-                name=variable_id,
-                units=info.units.get(variable_id),
-                colour=next(colours),
-                data=data_df[variable_id],
-                variance=variance_df[variable_id],
-            )
-
-        variable_loading_dir = os.path.join(directory, "variable_loading")
-        if not os.path.isdir(variable_loading_dir):
-            raise NotADirectoryError(variable_loading_dir)
-
-        variable_loading_files = [
-            os.path.join(variable_loading_dir, f) for f in os.listdir(variable_loading_dir) if f.endswith(".json")
-        ]
-
-        predefined_variable_loadings = {}
-        for variable_loading_file in variable_loading_files:
-            with open(variable_loading_file) as f:
-                predefined = PredefinedVariableLoading.model_validate_json(f.read())
-                predefined_variable_loadings[predefined.name] = predefined
-
-        obj = cls(
-            name=info.name,
-            description=info.description,
-            site_id=info.site_id,
-            peat_extent=da,
-            variables=variables,
-            predefined_variable_loadings=predefined_variable_loadings,
-        )
-
-        obj.assign_predefined_variable_loadings(info.default_variable_loading_name)
-
-        return obj
+    @abc.abstractmethod
+    def from_directory(cls, directory: str) -> typing.Self:
+        raise NotImplementedError
 
     def loading_sliders(self):
         """
@@ -333,20 +224,21 @@ class SiteLevelPHI(pn.viewable.Viewer):
             self.peat_health_indicator,
             kdims=["time"],
         )
+        curve.opts(framewise=True)  # allow ylims to update
 
         scatter = hv.Scatter(
             self.peat_health_indicator,
             kdims=["time"],
         )
         scatter.opts(size=4)
+        scatter.opts(framewise=True)  # allow ylims to update
 
         overlay = curve * scatter
         overlay.opts(
             xlabel="date",
             ylabel="Peat Health Indicator",
         )
-        overlay.opts(framewise=True)  # allow ylims to update
-
+        
         return overlay
 
     def map(self):
@@ -410,46 +302,63 @@ class SiteLevelPHI(pn.viewable.Viewer):
         )
 
 
-@pn.cache
-def all_site_level_peat_health_indicators() -> dict[str, dict[str, str]]:
-    """
-    Search `SITE_LEVEL_PHI_DIR` for site-level peat health indicators.
+class DailyPHI(BasePHI):
 
-    Returns: mapping from site-id -> extent name -> subdirectory.
-    """
-    if settings.SITE_LEVEL_PHI_DIR is None:
-        raise ValueError("SITE_LEVEL_PHI_DIR is not set")
+    @classmethod
+    def from_directory(cls, directory: str) -> typing.Self:
+        model = models.SiteLevelPHI.from_directory(directory)
 
-    if not os.path.isdir(settings.SITE_LEVEL_PHI_DIR):
-        raise NotADirectoryError(settings.SITE_LEVEL_PHI_DIR)
+        variables = {}
+        colours = utils.colours()
+        for variable_id in model.data.columns:
+            variables[variable_id] = z_score.DailyVariable(
+                name=variable_id,
+                units=model.info.units.get(variable_id),
+                colour=next(colours),
+                data=model.data[variable_id],
+                variance=model.variance[variable_id],
+            )
 
-    ret = defaultdict(dict)
+        obj = cls(
+            name=model.info.name,
+            description=model.info.description,
+            site_id=model.info.site_id,
+            peat_extent=model.peat_extent,
+            variables=variables,
+            predefined_variable_loadings=model.variable_loadings,
+        )
 
-    for item in os.listdir(settings.SITE_LEVEL_PHI_DIR):
-        item_path = os.path.join(settings.SITE_LEVEL_PHI_DIR, item)
-        if not os.path.isdir(item_path):
-            continue
-        subdir = item_path
-        info_file = os.path.join(subdir, "info.json")
-        if not os.path.isfile(info_file):
-            continue
-        with open(info_file, "r") as f:
-            info = InfoModel.model_validate_json(f.read())
-        ret[info.site_id][info.name] = subdir
+        obj.assign_predefined_variable_loadings(model.info.default_variable_loading_name)
 
-    return ret
+        return obj
 
 
-# deepcopy because mutable objects are cached
-@utils.deepcopy
-@pn.cache
-def get_phi(site_id: str, extent_name: str) -> SiteLevelPHI | None:
-    """
-    Get a SiteLevelPHI instance for a given site_id and name.
-    """
-    phis = all_site_level_peat_health_indicators()
-    try:
-        directory = phis[site_id][extent_name]
-    except KeyError:
-        return None
-    return SiteLevelPHI.from_directory(directory)
+class AnnualPHI(BasePHI):
+
+    @classmethod
+    def from_directory(cls, directory: str) -> typing.Self:
+        model = models.SiteLevelPHI.from_directory(directory)
+
+        variables = {}
+        colours = utils.colours()
+        for variable_id in model.annual_data.columns:
+            variables[variable_id] = z_score.AnnualVariable(
+                name=variable_id,
+                units=model.info.units.get(variable_id),
+                colour=next(colours),
+                data=model.annual_data[variable_id],
+                variance=model.annual_variance[variable_id],
+            )
+
+        obj = cls(
+            name=model.info.name,
+            description=model.info.description,
+            site_id=model.info.site_id,
+            peat_extent=model.peat_extent,
+            variables=variables,
+            predefined_variable_loadings=model.variable_loadings,
+        )
+
+        obj.assign_predefined_variable_loadings(model.info.default_variable_loading_name)
+
+        return obj
