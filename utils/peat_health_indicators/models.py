@@ -84,17 +84,17 @@ class SiteLevelPHI(ImmutableModel):
     @property
     def peat_extent(self) -> xr.DataArray:
         """
-        Try to load a sensible overview from the cloud optimized GeoTIFF
+        Load the peat extent GeoTIFF into xarray.
+        Try to load a sensible overview from the cloud optimized GeoTIFF,
+        to plot at reasonable resolution.
         """
+        # a better solution would be to datashade dynamically.
+        
         # don't try to render a array with a dimension > MAX_PIX
         MAX_PIX = 2048
 
         # first open the raw (high res) data
-        overview_level = 0
-        da = rioxarray.open_rasterio(
-            self.peat_extent_file,
-            overview_level=overview_level,
-        )
+        da = rioxarray.open_rasterio(self.peat_extent_file)
         if not isinstance(da, xr.DataArray):
             raise ValueError("expected a DataArray")
         da = da.squeeze("band", drop=True)
@@ -104,6 +104,7 @@ class SiteLevelPHI(ImmutableModel):
         ny = da.sizes["y"]
 
         # if too large, try higher overview levels
+        overview_level = 0
         while nx > MAX_PIX or ny > MAX_PIX:
             overview_level += 1
             try:
