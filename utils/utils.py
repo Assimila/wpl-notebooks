@@ -152,6 +152,9 @@ def fix_crs_extent(crs: ccrs.CRS):
     Additionally, the cost of imposing this masking is significant (multiple seconds).
 
     Central Kalimantan sits on the border between UTM 49S and UTM 50S.
+
+    Kampar 1 sits on the border between UTM 47N and UTM 48N.
+
     So we need to extend the bounds of the CRS a little,
     even though this results in greater spatial distortion.
     """
@@ -161,6 +164,15 @@ def fix_crs_extent(crs: ccrs.CRS):
         crs.bounds = (
             x0 - 50000,
             x1,
+            y0,
+            y1,
+        )
+    elif crs.to_epsg() == 32647:  # UTM 47N
+        # extend the bounds to the east
+        x0, x1, y0, y1 = crs.bounds
+        crs.bounds = (
+            x0,
+            x1 + 50000,
             y0,
             y1,
         )
