@@ -257,6 +257,7 @@ class BasePHI(pn.viewable.Viewer):
 
         overlay = basemap * image
         overlay.opts(projection=ccrs.GOOGLE_MERCATOR)
+        overlay.opts(shared_axes=False)  # disable linked panning/zooming
 
         return overlay
 
