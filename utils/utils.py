@@ -133,6 +133,25 @@ def colours() -> Iterator[str]:
     yield from itertools.cycle(colours)
 
 
+def darker(colour: str, factor: float = 0.5) -> str:
+    """
+    Darken a hex colour by a given factor.
+
+    Arguments:
+        colour: Hex colour string, e.g. "#ff0000"
+        factor: Factor to darken by, between 0 (black) and 1.0 (original colour).
+    """
+    if colour.startswith("#"):
+        colour = colour[1:]
+    r = int(colour[0:2], 16)
+    g = int(colour[2:4], 16)
+    b = int(colour[4:6], 16)
+    r = int(r * factor)
+    g = int(g * factor)
+    b = int(b * factor)
+    return f"#{r:02x}{g:02x}{b:02x}"
+
+
 def deepcopy[**P, R](func: Callable[P, R]) -> Callable[P, R]:
     """
     Decorator that returns a deepcopy of the inner function's return value.

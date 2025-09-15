@@ -129,6 +129,8 @@ class SiteLevelPHI(ImmutableModel):
         """
         Load the time series data from the HDF5 file.
 
+        Massage the index to be "labelled left".
+
         Returns:
             A tuple of four DataFrames:
             - data: time series data
@@ -169,6 +171,22 @@ class SiteLevelPHI(ImmutableModel):
             raise ValueError("variance must be non-negative")
         if (annual_variance <= 0).any().any():
             raise ValueError("annual_variance must be non-negative")
+        
+        # massage data to be "labelled left"
+        # daily data: chop off the time component
+        if not isinstance(data.index, pd.DatetimeIndex):
+            raise ValueError("data index must be a DatetimeIndex")
+        data.index = data.index.normalize()
+        if not isinstance(variance.index, pd.DatetimeIndex):
+            raise ValueError("variance index must be a DatetimeIndex")
+        variance.index = variance.index.normalize()
+        # annual data: force 1 January
+        if not isinstance(annual_data.index, pd.DatetimeIndex):
+            raise ValueError("annual_data index must be a DatetimeIndex")
+        annual_data.index = pd.to_datetime(annual_data.index.year, format="%Y")
+        if not isinstance(annual_variance.index, pd.DatetimeIndex):
+            raise ValueError("annual_variance index must be a DatetimeIndex")
+        annual_variance.index = pd.to_datetime(annual_variance.index.year, format="%Y")
 
         return data, variance, annual_data, annual_variance
     

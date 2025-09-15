@@ -220,26 +220,24 @@ class BasePHI(pn.viewable.Viewer):
         """
         Holoviews plot of the peat_health_indicator time series.
         """
-        curve = hv.Curve(
-            self.peat_health_indicator,
-            kdims=["time"],
-        )
-        curve.opts(framewise=True)  # allow ylims to update
 
-        scatter = hv.Scatter(
-            self.peat_health_indicator,
-            kdims=["time"],
-        )
-        scatter.opts(size=4)
-        scatter.opts(framewise=True)  # allow ylims to update
+        default_colour = next(utils.colours())
+        negative_colour = utils.darker(default_colour)
+        colour = self.peat_health_indicator.map(lambda z: negative_colour if z < 0 else default_colour)
 
-        overlay = curve * scatter
-        overlay.opts(
+        bars = hv.Bars(
+            {"time": self.peat_health_indicator.index, "phi": self.peat_health_indicator.values, "color": colour},
+            kdims=["time"],
+            vdims=["phi", "color"],
+        )
+        bars.opts(color="color", line_color=None, bar_width=1)
+        bars.opts(framewise=True)  # allow ylims to update
+        bars.opts(
             xlabel="date",
             ylabel="Peat Health Indicator",
         )
-        
-        return overlay
+
+        return bars
 
     def map(self):
         """
@@ -303,7 +301,6 @@ class BasePHI(pn.viewable.Viewer):
 
 
 class DailyPHI(BasePHI):
-
     @classmethod
     def from_directory(cls, directory: str) -> typing.Self:
         model = models.SiteLevelPHI.from_directory(directory)
@@ -334,7 +331,6 @@ class DailyPHI(BasePHI):
 
 
 class AnnualPHI(BasePHI):
-
     @classmethod
     def from_directory(cls, directory: str) -> typing.Self:
         model = models.SiteLevelPHI.from_directory(directory)

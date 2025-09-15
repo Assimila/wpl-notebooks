@@ -6,6 +6,7 @@ import pandas as pd
 import panel as pn
 import param
 
+from .. import utils
 from . import annual_climatology, daily_climatology
 
 
@@ -185,36 +186,30 @@ class BaseVariable(pn.viewable.Viewer):
         """
         self._fix_index_names()
 
-        curve = hv.Curve(
-            self.z_score,
+        negative_colour = utils.darker(self.colour)
+        colour = self.z_score.map(
+            lambda z: negative_colour if z < 0 else self.colour
+        )
+
+        bars = hv.Bars(
+            {"time": self.z_score.index, "z-score": self.z_score.values, "color": colour},
             kdims=["time"],
-            vdims=["z-score"],
+            vdims=["z-score", "color"],
         )
         # this redim prevents axes from automatically linking
-        curve: hv.Curve = curve.redim(
+        bars: hv.Bars = bars.redim(
             **{
                 "z-score": f"{self.name} z-score",
             }
         )  # type: ignore
-        curve.opts(color=self.colour)
-
-        scatter = hv.Scatter(
-            self.z_score,
-            kdims=["time"],
-        )
-        scatter.opts(
-            color=self.colour,
-            size=4,
-        )
-
-        overlay = curve * scatter
-        overlay.opts(
+        bars.opts(color="color", line_color=None, bar_width=1)
+        bars.opts(
             title=f"{self.name} z-score",
             xlabel="date",
             ylabel=self.name,
         )
 
-        return overlay
+        return bars
 
     def __panel__(self) -> pn.Column:
         """
