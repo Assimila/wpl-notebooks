@@ -137,6 +137,8 @@ Check that the application is running by visiting `https://dashboard.worldpeatla
 ## Configure the panel application to run as a systemd service
 
 Check the paths in the service file `deployment/wpl-dashboard.service` and adjust them if necessary.
+Pay specific attention to the `SITE_LEVEL_PHI_DIR` environment variable,
+which should be an absolute path to a directory where data for the site-level peat health indicators is stored.
 
 ```bash
 sudo cp deployment/wpl-dashboard.service /etc/systemd/system/wpl-dashboard.service
