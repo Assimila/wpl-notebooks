@@ -1,9 +1,9 @@
 # WorldPeatland Notebooks
 
-This repository contains the implementation of a number of components of the WorldPeatland project.
+This repository contains the implementation of a number of components of the [WorldPeatland](https://www.worldpeatland.org/) project.
 
 1\. A [Panel](https://panel.holoviz.org/) application in the `app/` directory.
-This is the project dashboard interface.
+This is the project [dashboard interface](https://dashboard.worldpeatland.org/).
 Deployment instructions are in the `deployment/` directory.
 A user guide for the dashboard is provided in `dashboard-user-guide.md`.
 
