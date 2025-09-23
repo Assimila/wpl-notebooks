@@ -143,13 +143,13 @@ With transformation:
 ![water level - transformed relative to optimal](dashboard-user-guide/daily-phi5-ann.png)
 
 In the sidebar we provide one colour-coded slider per variable.
-These sliders control the loading of each variable in the calculation of the peat health index.
-The user can adjust the sliders to interactively explore the effect of different loadings on the peat health index.
+These sliders control the loading of each variable in the calculation of the peat health indicator.
+The user can adjust the sliders to interactively explore the effect of different loadings on the peat health indicator.
 
 Below the variable loading sliders we provide access to sets of pre-defined loadings.
 These have been calculated statistically, or defined by experts.
 
-At the bottom of the page we plot the integrated peat health index,
+At the bottom of the page we plot the integrated peat health indicator,
 as calculated using the variable loadings (defined by the sliders),
 and accounting for any variables that have been transformed relative to an optimal value.
 
