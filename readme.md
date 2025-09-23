@@ -39,3 +39,9 @@ PYTHONPATH=$(pwd) jupyter notebook
 ```bash
 PYTHONPATH=$(pwd) panel serve app/*.ipynb --index sites --dev
 ```
+
+## convert the dashboard user guide to pdf
+
+```bash
+docker run --rm -it -v "$(pwd):/data" jakobkmar/pandoc-all-in-one --include-in-header=dashboard-user-guide/header.tex dashboard-user-guide.md -o dashboard-user-guide.pdf
+```
