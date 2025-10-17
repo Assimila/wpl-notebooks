@@ -163,3 +163,14 @@ sudo journalctl -u wpl-dashboard.service -f
 
 The url `https://dashboard.worldpeatland.org/liveness` is a health check endpoint. 
 You can point tools like [uptimedoctor](www.uptimedoctor.com) at this URL to monitor the application.
+
+## Cache
+
+Due to caching in the Panel application,
+you will need to restart the `wpl-dashboard` service
+after updating the data in the `SITE_LEVEL_PHI_DIR` directory.
+Or after updating the STAC catalogue.
+
+```bash
+sudo systemctl restart wpl-dashboard.service
+```
